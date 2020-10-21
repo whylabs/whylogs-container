@@ -26,12 +26,14 @@ private fun tagsToKey(tags: Map<String, String>): TagsKey {
     return TagsKey(data)
 }
 
+private val AllowedChronoUnits = setOf(ChronoUnit.HOURS, ChronoUnit.MINUTES, ChronoUnit.DAYS)
+
 class WhyLogsProfileManager(
     outputPath: String,
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
-    private val chronoUnit: ChronoUnit = ChronoUnit.HOURS,
-    currentTime: Instant = Instant.now(),
+    period: String?,
     awsKmsKeyId: String? = null,
+    currentTime: Instant = Instant.now(),
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -51,9 +53,14 @@ class WhyLogsProfileManager(
     private val writer: Writer
 
     private val lock = ReentrantLock()
-
+    private val chronoUnit: ChronoUnit = ChronoUnit.valueOf(period ?: ChronoUnit.HOURS.name)
 
     init {
+        if (!AllowedChronoUnits.contains(chronoUnit)) {
+            throw IllegalArgumentException("Unsupported time units. Please use among: ${AllowedChronoUnits.joinToString { "; " }}")
+        }
+
+        logger.info("Using time unit: ", chronoUnit)
         val nextRun = currentTime.plus(1, chronoUnit).truncatedTo(chronoUnit)
         val initialDelay = nextRun.epochSecond - currentTime.epochSecond
 

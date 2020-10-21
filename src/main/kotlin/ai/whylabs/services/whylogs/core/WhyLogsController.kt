@@ -23,7 +23,11 @@ class WhyLogsController {
 
     private val outputPath = System.getenv("OUTPUT_PATH") ?: "/opt/whylogs/output"
 
-    private val profileManager = WhyLogsProfileManager(outputPath, awsKmsKeyId = System.getenv("AWS_KMS_KEY_ID"))
+    private val profileManager = WhyLogsProfileManager(
+        outputPath,
+        awsKmsKeyId = System.getenv("AWS_KMS_KEY_ID"),
+        period = System.getenv("WHYLOGS_PERIOD"),
+    )
 
     fun preprocess(ctx: Context) {
         try {

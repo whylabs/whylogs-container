@@ -18,6 +18,7 @@ the heap to the appropriate size of your container. The heap size also determine
 you can track at the same time (i.e. number of tag key-value combination)
 ```
 OUTPUT_PATH=s3://<your-bucket>/<prefix>
+WHYLOGS_PERIOD=HOURS (default is HOURS if unspecified. Supported values: MINUTES, HOURS, DAYS)
 AWS_REGION=<your bucket's AWS region>~~~~
 AWS_ACCESS_KEY_ID=<AWS access Key ID>
 AWS_SECRET_ACCESS_KEY=<AWS-ACCESS-KEY>
