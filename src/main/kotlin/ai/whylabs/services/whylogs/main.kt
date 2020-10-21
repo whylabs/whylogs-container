@@ -17,12 +17,13 @@ data class ErrorResponse(
     val details: Map<String, String>?
 )
 
-fun main(args: Array<String>) {
+fun main() {
     val logger = LoggerFactory.getLogger("ai.whylabs.services.whylogs")
     val whylogs = WhyLogsController()
     val app = Javalin.create {
         it.registerPlugin(getConfiguredOpenApiPlugin())
         it.defaultContentType = "application/json"
+        it.showJavalinBanner = false
     }
 
     app.before("logs", whylogs::preprocess)
@@ -32,9 +33,10 @@ fun main(args: Array<String>) {
         }
     }
 
-    app.start(7001)
+    val port = System.getenv("PORT")?.toInt() ?: 8080
+    app.start(port)
 
-    logger.info("Check out ReDoc docs at http://localhost:7001/swagger-ui")
+    logger.info("Checkout Swagger UI at http://localhost:8080/swagger-ui")
 }
 
 fun getConfiguredOpenApiPlugin() = OpenApiPlugin(
@@ -46,9 +48,5 @@ fun getConfiguredOpenApiPlugin() = OpenApiPlugin(
     ).apply {
         path("/swagger-docs") // endpoint for OpenAPI json
         swagger(SwaggerOptions("/swagger-ui")) // endpoint for swagger-ui
-        defaultDocumentation { doc ->
-            doc.json("500", ErrorResponse::class.java)
-            doc.json("503", ErrorResponse::class.java)
-        }
     }
 )

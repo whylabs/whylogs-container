@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
+    idea
     kotlin("jvm") version "1.4.10"
     application
 }
@@ -11,6 +12,8 @@ repositories {
     mavenCentral()
 }
 dependencies {
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.4.10")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.4.10")
     implementation("io.javalin:javalin:3.11.2")
     implementation("io.javalin:javalin-openapi:3.11.2")
     implementation("io.swagger.core.v3:swagger-core:2.1.5")
@@ -27,5 +30,5 @@ tasks.withType<KotlinCompile>() {
     kotlinOptions.jvmTarget = "1.8"
 }
 application {
-    mainClassName = "MainKt"
+    mainClassName = "ai.whylabs.services.whylogs.MainKt"
 }

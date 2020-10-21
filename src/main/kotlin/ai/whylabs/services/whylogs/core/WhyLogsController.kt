@@ -20,7 +20,9 @@ class WhyLogsController {
     private val sessionId = UUID.randomUUID().toString()
     private val sessionTime = Instant.now()
 
-    private val profileManager = WhyLogsProfileManager("/tmp/whylogs")
+    private val outputPath = System.getenv("OUTPUT_PATH") ?: "/opt/whylogs/output"
+
+    private val profileManager = WhyLogsProfileManager(outputPath)
 
     fun preprocess(ctx: Context) {
         try {
@@ -38,26 +40,24 @@ class WhyLogsController {
         operationId = "track",
         tags = ["whylogs"],
         requestBody = OpenApiRequestBody(content = [OpenApiContent(type = ContentType.JSON)]),
-        responses = [OpenApiResponse("200")]
+        responses = [OpenApiResponse("200"), OpenApiResponse("400", description = "Bad or invalid input body")]
     )
     fun track(ctx: Context) {
         val body = ctx.attribute<JsonNode>(AttributeKey)
 
         if (body == null) {
-            ctx.res.status = 400
-            ctx.result("Missing or invalid body request")
+            return400(ctx, "Missing or invalid body request")
             return
         }
 
         val datasetName = body.get("datasetName").asText("unknown")
         val tags = mutableMapOf("Name" to datasetName)
-        val profile = profileManager.getProfile(tags);
+        val profile = profileManager.getProfile(tags)
         val singleEntry = body.get("single")
         val multipleEntries = body.get("multiple")
 
         if (singleEntry.isMissingNode && multipleEntries.isMissingNode) {
-            ctx.res.status = 400
-            ctx.result("Missing input data")
+            return400(ctx, "Missing input data")
 
         }
         if (!singleEntry.isMissingNode) {
@@ -68,8 +68,7 @@ class WhyLogsController {
             val featuresJson = multipleEntries.get("columns")
             val dataJson = multipleEntries.get("data")
             if (!(featuresJson.isArray && featuresJson.all { it.isTextual }) || !(dataJson.isArray && dataJson.all { it.isArray })) {
-                ctx.res.status = 400
-                ctx.result("Malformed input data")
+                return400(ctx, "Malformed input data")
                 return
             }
             val features = featuresJson.map { value -> value.textValue() }.toList()
@@ -79,6 +78,11 @@ class WhyLogsController {
                 }
             }
         }
+    }
+
+    private fun return400(ctx: Context, message: String) {
+        ctx.res.status = 400
+        ctx.result(message)
     }
 
     private fun trackInputMap(

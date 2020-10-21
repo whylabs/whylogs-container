@@ -8,12 +8,12 @@
 
     </Appenders>
     <Loggers>
-        <Logger name="ai.whylabs" level="info">
+        <Logger name="ai.whylabs" level="debug">
             <AppenderRef ref="Console"/>
         </Logger>
 
         <Root level="all">
-            <AppenderRef ref="Console" level="info"/>
+            <AppenderRef ref="Console" level="warn"/>
         </Root>
     </Loggers>
 </Configuration>

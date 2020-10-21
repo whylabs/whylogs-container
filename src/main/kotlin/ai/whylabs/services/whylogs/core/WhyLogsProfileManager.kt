@@ -11,7 +11,10 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
-import java.util.concurrent.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
 
@@ -47,14 +50,14 @@ class WhyLogsProfileManager(
     private var windowStartTime: Instant = Instant.now().truncatedTo(ChronoUnit.HOURS)
 
     private val lock = ReentrantLock()
+    private val chronoUnit = ChronoUnit.MINUTES
 
 
     init {
-        val chronoUnit = ChronoUnit.MINUTES
         val nextRun = currentTime.plus(1, chronoUnit).truncatedTo(chronoUnit)
         val initialDelay = nextRun.epochSecond - currentTime.epochSecond
 
-        logger.info("Starting profile manager")
+        logger.info("Starting profile manager using time unit: {}", chronoUnit)
         windowStartTime = currentTime.truncatedTo(chronoUnit)
         executorService.scheduleWithFixedDelay(
             this::rotate,
@@ -74,6 +77,7 @@ class WhyLogsProfileManager(
         lock.lock()
         try {
             return profiles.computeIfAbsent(mapKey) {
+                logger.info("Create new profile for key: {}", mapKey)
                 DatasetProfile(sessionId, sessionTime, windowStartTime, tags, mapOf())
             }
         } finally {
@@ -83,10 +87,11 @@ class WhyLogsProfileManager(
 
     private fun stop() {
         logger.debug("Stopping Profile Manager")
-        lock.lock();
+        lock.lock()
         try {
-            isRunning = false;
+            isRunning = false
             writeOutProfiles()
+            executorService.shutdownNow()
         } finally {
             lock.unlock()
         }
@@ -95,15 +100,18 @@ class WhyLogsProfileManager(
     private fun rotate() {
         lock.lock()
         try {
+            logger.info("Log rotation for window: {}", windowStartTime)
             writeOutProfiles()
             profiles = ConcurrentHashMap()
-            windowStartTime = Instant.now().truncatedTo(ChronoUnit.HOURS)
+            windowStartTime = Instant.now().truncatedTo(chronoUnit)
+            logger.info("New window time: {}", windowStartTime)
         } finally {
             lock.unlock()
         }
     }
 
     private fun writeOutProfiles() {
+        logger.info("Writing out profile for window: {}", windowStartTime)
         for (item in profiles) {
             val hexSuffix = DigestUtils.md5Hex(item.key.makeString()).substring(0, 10)
             val outputFile = Paths.get(outputPath).resolve("profile.${windowStartTime.toEpochMilli()}.${hexSuffix}.bin")
