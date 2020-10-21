@@ -29,7 +29,7 @@ private fun tagsToKey(tags: Map<String, String>): TagsKey {
 class WhyLogsProfileManager(
     outputPath: String,
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
-    private val chronoUnit: ChronoUnit = ChronoUnit.MINUTES,
+    private val chronoUnit: ChronoUnit = ChronoUnit.HOURS,
     currentTime: Instant = Instant.now(),
     awsKmsKeyId: String? = null,
 ) {

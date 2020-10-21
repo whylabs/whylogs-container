@@ -116,7 +116,7 @@ class WhyLogsController {
             return
         }
 
-        logger.info("Track single entries. Fields: {}", inputMap.fieldNames().asSequence().toList())
+        logger.debug("Track single entries. Fields: {}", inputMap.fieldNames().asSequence().toList())
         for (field in inputMap.fields()) {
             trackInProfile(profile, field.key, field.value)
         }
