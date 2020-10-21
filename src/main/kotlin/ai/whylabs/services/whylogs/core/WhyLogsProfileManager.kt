@@ -106,7 +106,9 @@ class WhyLogsProfileManager(
         try {
             isRunning = false
             writeOutProfiles()
+            logger.info("Shutting down the executor")
             executorService.shutdownNow()
+            logger.info("Finished cleaning up resources")
         } finally {
             lock.unlock()
         }

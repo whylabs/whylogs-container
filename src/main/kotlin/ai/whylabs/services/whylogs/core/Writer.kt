@@ -35,7 +35,8 @@ class S3Writer(s3OutputPath: String, private val awsKmsKeyId: String?) : Writer 
 
         logger.info("Using S3 buket: {}. Prefix: {}", s3Uri.bucket, s3Uri.key)
 
-        s3 = AmazonS3ClientBuilder.standard().build()
+        s3 = AmazonS3ClientBuilder.standard()
+            .build()
     }
 
     override fun write(profile: DatasetProfile, outputFileName: String) {
@@ -60,7 +61,7 @@ class S3Writer(s3OutputPath: String, private val awsKmsKeyId: String?) : Writer 
         } catch (e: IOException) {
             logger.warn("Failed to write output to path: {}", tempFile, e)
         } catch (e: SdkClientException) {
-            logger.warn("Failed to upload data to S3. Path: {}", s3Uri, e)
+            logger.warn("Failed to upload data to S3. Path: {}{}", s3Uri, outputFileName, e)
         } catch (e: AmazonServiceException) {
             logger.warn("S3 service returns an exception for upload. Path: {}", s3Uri, e)
         } finally {

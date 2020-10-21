@@ -52,8 +52,18 @@ class WhyLogsController {
         }
         logger.debug("Request body: {}", body)
 
-        val datasetName = body.get("datasetName").asText("unknown")
+        val inputDatasetName = body.get("datasetName").textValue()
+        val datasetName = if (inputDatasetName.isNullOrBlank()) "default" else inputDatasetName
+        val jsonTags = body.get("tags")
         val tags = mutableMapOf("Name" to datasetName)
+        if (jsonTags.isObject) {
+            for (tag in jsonTags.fields()) {
+                tag.value.textValue()?.let { tags.putIfAbsent(tag.key, it) }
+            }
+        } else {
+            logger.warn("Tags field is not a mapping. Ignoring tagging")
+        }
+
         val profile = profileManager.getProfile(tags)
         val singleEntry = body.get("single")
         val multipleEntries = body.get("multiple")
