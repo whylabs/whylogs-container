@@ -1,9 +1,5 @@
 package ai.whylabs.services.whylogs.core
 
-import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -31,10 +27,11 @@ private fun tagsToKey(tags: Map<String, String>): TagsKey {
 }
 
 class WhyLogsProfileManager(
-    private val outputPath: String,
+    outputPath: String,
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
     private val chronoUnit: ChronoUnit = ChronoUnit.MINUTES,
     currentTime: Instant = Instant.now(),
+    awsKmsKeyId: String? = null,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -51,12 +48,27 @@ class WhyLogsProfileManager(
     @Volatile
     private var windowStartTime: Instant
 
+    private val writer: Writer
+
     private val lock = ReentrantLock()
 
 
     init {
         val nextRun = currentTime.plus(1, chronoUnit).truncatedTo(chronoUnit)
         val initialDelay = nextRun.epochSecond - currentTime.epochSecond
+
+        writer = if (outputPath.startsWith("s3://")) {
+            logger.info("Using S3 writer")
+
+            if (awsKmsKeyId != null) {
+                logger.info("Using AWS S3 Server Side Encryption with KMS key: {}", awsKmsKeyId)
+            } else {
+                logger.info("Using AWS without KMS encryption")
+            }
+            S3Writer(outputPath, awsKmsKeyId)
+        } else {
+            LocalWriter(outputPath)
+        }
 
         logger.info("Using output path: {}", outputPath)
         logger.info("Starting profile manager using time unit: {}", chronoUnit)
@@ -117,18 +129,8 @@ class WhyLogsProfileManager(
         logger.info("Writing out profiles for window: {}", windowStartTime)
         for (item in profiles) {
             val hexSuffix = DigestUtils.md5Hex(item.key.makeString()).substring(0, 10)
-            val outputFile = Paths.get(outputPath).resolve("profile.${windowStartTime.toEpochMilli()}.${hexSuffix}.bin")
-            try {
-                Files.newOutputStream(outputFile,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING,
-                    StandardOpenOption.WRITE).use { os ->
-                    item.value.toProtobuf().build().writeDelimitedTo(os)
-                }
-                logger.debug("Wrote output to: {}", outputFile)
-            } catch (e: IOException) {
-                logger.warn("Failed to write output to path: {}", outputFile, e)
-            }
+            val outputFile = "profile.${windowStartTime.toEpochMilli()}.${hexSuffix}.bin"
+            writer.write(item.value, outputFile)
         }
     }
 }
