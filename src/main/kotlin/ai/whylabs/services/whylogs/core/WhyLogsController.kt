@@ -5,10 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeType
 import com.whylogs.core.DatasetProfile
 import io.javalin.http.Context
-import io.javalin.plugin.openapi.annotations.*
+import io.javalin.plugin.openapi.annotations.ContentType
+import io.javalin.plugin.openapi.annotations.HttpMethod
+import io.javalin.plugin.openapi.annotations.OpenApi
+import io.javalin.plugin.openapi.annotations.OpenApiContent
+import io.javalin.plugin.openapi.annotations.OpenApiRequestBody
+import io.javalin.plugin.openapi.annotations.OpenApiResponse
 import org.slf4j.LoggerFactory
-import java.time.Instant
-import java.util.*
 
 
 internal const val AttributeKey = "jsonObject"
@@ -17,8 +20,6 @@ internal val DummyObject = Object()
 class WhyLogsController {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val mapper = ObjectMapper()
-    private val sessionId = UUID.randomUUID().toString()
-    private val sessionTime = Instant.now()
 
     private val outputPath = System.getenv("OUTPUT_PATH") ?: "/opt/whylogs/output"
 
@@ -49,6 +50,7 @@ class WhyLogsController {
             return400(ctx, "Missing or invalid body request")
             return
         }
+        logger.debug("Request body: {}", body)
 
         val datasetName = body.get("datasetName").asText("unknown")
         val tags = mutableMapOf("Name" to datasetName)
@@ -58,24 +60,33 @@ class WhyLogsController {
 
         if (singleEntry.isMissingNode && multipleEntries.isMissingNode) {
             return400(ctx, "Missing input data")
-
         }
         if (!singleEntry.isMissingNode) {
-            trackInputMap(singleEntry, ctx, profile)
+            trackSingle(singleEntry, ctx, profile)
             return
         }
         if (!multipleEntries.isMissingNode) {
-            val featuresJson = multipleEntries.get("columns")
-            val dataJson = multipleEntries.get("data")
-            if (!(featuresJson.isArray && featuresJson.all { it.isTextual }) || !(dataJson.isArray && dataJson.all { it.isArray })) {
-                return400(ctx, "Malformed input data")
-                return
-            }
-            val features = featuresJson.map { value -> value.textValue() }.toList()
-            for (entry in dataJson) {
-                for (i in 0..features.size) {
-                    trackInProfile(profile, features[i], entry.get(i))
-                }
+            trackMultiple(multipleEntries, ctx, profile)
+        }
+    }
+
+    private fun trackMultiple(
+        multipleEntries: JsonNode,
+        ctx: Context,
+        profile: DatasetProfile,
+    ) {
+        val featuresJson = multipleEntries.get("columns")
+        val dataJson = multipleEntries.get("data")
+
+        if (!(featuresJson.isArray && featuresJson.all { it.isTextual }) || !(dataJson.isArray && dataJson.all { it.isArray })) {
+            return400(ctx, "Malformed input data")
+            return
+        }
+        val features = featuresJson.map { value -> value.textValue() }.toList()
+        logger.debug("Track multiple entries. Features: {}", features)
+        for (entry in dataJson) {
+            for (i in 0..features.size) {
+                trackInProfile(profile, features[i], entry.get(i))
             }
         }
     }
@@ -85,20 +96,20 @@ class WhyLogsController {
         ctx.result(message)
     }
 
-    private fun trackInputMap(
+    private fun trackSingle(
         inputMap: JsonNode,
         ctx: Context,
         profile: DatasetProfile,
-    ): Boolean {
+    ) {
         if (!inputMap.isObject) {
-            ctx.res.status = 400
-            ctx.result("InputMap is not an object")
-            return true
+            return400(ctx, "InputMap is not an object")
+            return
         }
+
+        logger.info("Track single entries. Fields: {}", inputMap.fieldNames().asSequence().toList())
         for (field in inputMap.fields()) {
             trackInProfile(profile, field.key, field.value)
         }
-        return false
     }
 
     private fun trackInProfile(

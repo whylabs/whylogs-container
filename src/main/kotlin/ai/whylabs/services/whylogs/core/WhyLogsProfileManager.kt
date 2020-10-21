@@ -1,8 +1,5 @@
 package ai.whylabs.services.whylogs.core
 
-import com.whylogs.core.DatasetProfile
-import org.apache.commons.codec.digest.DigestUtils
-import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -10,12 +7,16 @@ import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.*
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
+import com.whylogs.core.DatasetProfile
+import org.apache.commons.codec.digest.DigestUtils
+import org.slf4j.LoggerFactory
 
 
 data class TagsKey(val data: List<Pair<String, String>>) {
@@ -32,6 +33,7 @@ private fun tagsToKey(tags: Map<String, String>): TagsKey {
 class WhyLogsProfileManager(
     private val outputPath: String,
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
+    private val chronoUnit: ChronoUnit = ChronoUnit.MINUTES,
     currentTime: Instant = Instant.now(),
 ) {
 
@@ -44,20 +46,21 @@ class WhyLogsProfileManager(
     private var isRunning = false
 
     @Volatile
-    private var profiles = ConcurrentHashMap<TagsKey, DatasetProfile>()
+    private var profiles: ConcurrentMap<TagsKey, DatasetProfile>
 
     @Volatile
-    private var windowStartTime: Instant = Instant.now().truncatedTo(ChronoUnit.HOURS)
+    private var windowStartTime: Instant
 
     private val lock = ReentrantLock()
-    private val chronoUnit = ChronoUnit.MINUTES
 
 
     init {
         val nextRun = currentTime.plus(1, chronoUnit).truncatedTo(chronoUnit)
         val initialDelay = nextRun.epochSecond - currentTime.epochSecond
 
+        logger.info("Using output path: {}", outputPath)
         logger.info("Starting profile manager using time unit: {}", chronoUnit)
+        profiles = ConcurrentHashMap()
         windowStartTime = currentTime.truncatedTo(chronoUnit)
         executorService.scheduleWithFixedDelay(
             this::rotate,
@@ -77,7 +80,7 @@ class WhyLogsProfileManager(
         lock.lock()
         try {
             return profiles.computeIfAbsent(mapKey) {
-                logger.info("Create new profile for key: {}", mapKey)
+                logger.info("Create new profile for key: {}", it)
                 DatasetProfile(sessionId, sessionTime, windowStartTime, tags, mapOf())
             }
         } finally {
@@ -111,11 +114,10 @@ class WhyLogsProfileManager(
     }
 
     private fun writeOutProfiles() {
-        logger.info("Writing out profile for window: {}", windowStartTime)
+        logger.info("Writing out profiles for window: {}", windowStartTime)
         for (item in profiles) {
             val hexSuffix = DigestUtils.md5Hex(item.key.makeString()).substring(0, 10)
             val outputFile = Paths.get(outputPath).resolve("profile.${windowStartTime.toEpochMilli()}.${hexSuffix}.bin")
-            logger.debug("Writing output to: {}", outputFile)
             try {
                 Files.newOutputStream(outputFile,
                     StandardOpenOption.CREATE,

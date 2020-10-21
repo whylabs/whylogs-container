@@ -10,13 +10,6 @@ import io.javalin.plugin.openapi.ui.SwaggerOptions
 import io.swagger.v3.oas.models.info.Info
 import org.slf4j.LoggerFactory
 
-data class ErrorResponse(
-    val title: String,
-    val status: Int,
-    val type: String,
-    val details: Map<String, String>?
-)
-
 fun main() {
     val logger = LoggerFactory.getLogger("ai.whylabs.services.whylogs")
     val whylogs = WhyLogsController()
