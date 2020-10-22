@@ -45,6 +45,11 @@ class WhyLogsController {
         operationId = "track",
         tags = ["whylogs"],
         requestBody = OpenApiRequestBody(content = [OpenApiContent(type = ContentType.JSON)], description = """
+Pass the input in single entry format (a JSON object) or a multiple entry format.
+* Set `single` key if you're passing a single data point with multiple features
+* Set `multiple` key if you're passing multiple data at once. Here are the required fields:
+  * `columns`: specify an `array` of features
+  * `data`: array of actual data points
 Example: 
 ```
 {
@@ -191,9 +196,9 @@ Here is an example from the output above
     private fun trackInProfile(
         profile: DatasetProfile,
         featureName: String,
-        value: JsonNode,
+        value: JsonNode?,
     ) {
-        when (value.nodeType) {
+        when (value?.nodeType) {
             JsonNodeType.ARRAY, JsonNodeType.BINARY, JsonNodeType.POJO, JsonNodeType.OBJECT -> {
                 profile.track(
                     featureName,
