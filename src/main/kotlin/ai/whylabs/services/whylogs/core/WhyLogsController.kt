@@ -44,7 +44,69 @@ class WhyLogsController {
         summary = "Log a map of feature names and values or an array of data points",
         operationId = "track",
         tags = ["whylogs"],
-        requestBody = OpenApiRequestBody(content = [OpenApiContent(type = ContentType.JSON)]),
+        requestBody = OpenApiRequestBody(content = [OpenApiContent(type = ContentType.JSON)], description = """
+Example: 
+```
+{
+  "datasetName": "demo-model",
+  "tags": {
+    "tagKey": "tagValue"
+  },
+  "single": {
+    "feature1": "test",
+    "feature2": 1,
+    "feature3": 1.0,
+    "feature4": true
+  }
+}
+```
+
+Passing multiple data points. The data is compatible with Pandas JSON output:
+```
+import pandas as pd
+
+cars = {'Brand': ['Honda Civic','Toyota Corolla','Ford Focus','Audi A4'],
+        'Price': [22000,25000,27000,35000]
+        }
+
+df = pd.DataFrame(cars, columns = ['Brand', 'Price'])
+df.to_json(orient="split")
+```
+
+Here is an example from the output above
+```json
+{
+  "datasetName": "demo-model",
+  "tags": {
+    "tag1": "value1"
+  },
+  "multiple": {
+    "columns": [
+      "Brand",
+      "Price"
+    ],
+    "data": [
+      [
+        "Honda Civic",
+        22000
+      ],
+      [
+        "Toyota Corolla",
+        25000
+      ],
+      [
+        "Ford Focus",
+        27000
+      ],
+      [
+        "Audi A4",
+        35000
+      ]
+    ]
+  }
+}
+```
+"""),
         responses = [OpenApiResponse("200"), OpenApiResponse("400", description = "Bad or invalid input body")]
     )
     fun track(ctx: Context) {
@@ -56,15 +118,15 @@ class WhyLogsController {
         }
         logger.debug("Request body: {}", body)
 
-        val inputDatasetName = body.get("datasetName").textValue()
+        val inputDatasetName = body.get("datasetName")?.textValue()
         val datasetName = if (inputDatasetName.isNullOrBlank()) "default" else inputDatasetName
         val jsonTags = body.get("tags")
         val tags = mutableMapOf("Name" to datasetName)
-        if (jsonTags.isObject) {
+        if (jsonTags?.isObject == true) {
             for (tag in jsonTags.fields()) {
                 tag.value.textValue()?.let { tags.putIfAbsent(tag.key, it) }
             }
-        } else {
+        } else if (jsonTags?.isNull == false) {
             logger.warn("Tags field is not a mapping. Ignoring tagging")
         }
 
@@ -72,14 +134,14 @@ class WhyLogsController {
         val singleEntry = body.get("single")
         val multipleEntries = body.get("multiple")
 
-        if (singleEntry.isMissingNode && multipleEntries.isMissingNode) {
+        if (singleEntry?.isObject != true && multipleEntries?.isObject != true) {
             return400(ctx, "Missing input data")
         }
-        if (!singleEntry.isMissingNode) {
+        if (singleEntry?.isObject == true) {
             trackSingle(singleEntry, ctx, profile)
             return
         }
-        if (!multipleEntries.isMissingNode) {
+        if (multipleEntries?.isObject == true) {
             trackMultiple(multipleEntries, ctx, profile)
         }
     }
@@ -99,7 +161,7 @@ class WhyLogsController {
         val features = featuresJson.map { value -> value.textValue() }.toList()
         logger.debug("Track multiple entries. Features: {}", features)
         for (entry in dataJson) {
-            for (i in 0..features.size) {
+            for (i in features.indices) {
                 trackInProfile(profile, features[i], entry.get(i))
             }
         }
