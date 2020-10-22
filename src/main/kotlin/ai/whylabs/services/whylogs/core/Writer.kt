@@ -50,13 +50,14 @@ class S3Writer(s3OutputPath: String, private val awsKmsKeyId: String?) : Writer 
                 profile.toProtobuf().build().writeDelimitedTo(os)
             }
 
-            logger.info("Uploading data to S3")
-            val putRequest = PutObjectRequest(s3Uri.bucket, "${s3Uri.key}${outputFileName}", tempFile.toFile())
+            val s3Path = "${s3Uri.key}${outputFileName}"
+            val putRequest = PutObjectRequest(s3Uri.bucket, s3Path, tempFile.toFile())
             if (awsKmsKeyId != null) {
                 logger.debug("Using AWS KMS Key ID for SSE: {}", awsKmsKeyId)
                 putRequest.sseAwsKeyManagementParams = SSEAwsKeyManagementParams(awsKmsKeyId)
             }
             s3.putObject(putRequest)
+            logger.info("Data uploaded to S3: $s3Path")
 
         } catch (e: IOException) {
             logger.warn("Failed to write output to path: {}", tempFile, e)
