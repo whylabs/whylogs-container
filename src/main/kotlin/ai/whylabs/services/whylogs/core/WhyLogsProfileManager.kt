@@ -60,7 +60,7 @@ class WhyLogsProfileManager(
             throw IllegalArgumentException("Unsupported time units. Please use among: ${AllowedChronoUnits.joinToString { "; " }}")
         }
 
-        logger.info("Using time unit: ", chronoUnit)
+        logger.info("Using time unit: {}", chronoUnit)
         val nextRun = currentTime.plus(1, chronoUnit).truncatedTo(chronoUnit)
         val initialDelay = nextRun.epochSecond - currentTime.epochSecond
 
