@@ -23,11 +23,9 @@ class S3Writer(s3OutputPath: String, private val awsKmsKeyId: String?) : Writer 
     private val logger = LoggerFactory.getLogger(javaClass)
 
     private val s3Uri: AmazonS3URI
-    private val s3: AmazonS3
+    private val s3: AmazonS3 = AmazonS3ClientBuilder.standard().build()
 
     init {
-        s3 = AmazonS3ClientBuilder.standard()
-            .build()
         val pathWithouSlash = s3OutputPath.replace(Regex("/$"), "")
         s3Uri = AmazonS3URI(pathWithouSlash)
 
