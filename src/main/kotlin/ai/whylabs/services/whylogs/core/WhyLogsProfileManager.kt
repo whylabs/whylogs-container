@@ -81,6 +81,8 @@ class WhyLogsProfileManager(
         logger.info("Starting profile manager using time unit: {}", chronoUnit)
         profiles = ConcurrentHashMap()
         windowStartTime = currentTime.truncatedTo(chronoUnit)
+        logger.info("Starting with initial window: {}", windowStartTime)
+
         executorService.scheduleWithFixedDelay(
             this::rotate,
             initialDelay,
@@ -124,7 +126,7 @@ class WhyLogsProfileManager(
     private fun rotate() {
         lock.lock()
         try {
-            logger.info("Log rotation for window: {}", windowStartTime)
+            logger.info("Rotating logs for the current window: {}", windowStartTime)
             writeOutProfiles()
             profiles = ConcurrentHashMap()
             windowStartTime = Instant.now().truncatedTo(chronoUnit)
