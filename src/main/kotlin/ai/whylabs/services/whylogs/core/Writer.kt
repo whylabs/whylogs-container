@@ -26,17 +26,12 @@ class S3Writer(s3OutputPath: String, private val awsKmsKeyId: String?) : Writer 
     private val s3: AmazonS3
 
     init {
-        val pathEndsWithSlash = if (s3OutputPath.endsWith('/')) s3OutputPath else "${s3OutputPath}/"
-        s3Uri = AmazonS3URI(pathEndsWithSlash)
-
-        if (s3Uri.key == null) {
-            throw IllegalArgumentException("Missing S3 prefix from S3 path: ${s3OutputPath}")
-        }
-
-        logger.info("Using S3 buket: {}. Prefix: {}", s3Uri.bucket, s3Uri.key)
-
         s3 = AmazonS3ClientBuilder.standard()
             .build()
+        val pathWithouSlash = s3OutputPath.replace(Regex("/$"), "")
+        s3Uri = AmazonS3URI(pathWithouSlash)
+
+        logger.info("Using S3 buket: {}. Prefix: {}", s3Uri.bucket, s3Uri.key)
     }
 
     override fun write(profile: DatasetProfile, outputFileName: String) {
@@ -50,14 +45,19 @@ class S3Writer(s3OutputPath: String, private val awsKmsKeyId: String?) : Writer 
                 profile.toProtobuf().build().writeDelimitedTo(os)
             }
 
-            val s3Path = "${s3Uri.key}${outputFileName}"
+            val prefix = s3Uri.key
+            val s3Path = if (prefix == null) {
+                outputFileName
+            } else {
+                "$prefix/$outputFileName"
+            }
             val putRequest = PutObjectRequest(s3Uri.bucket, s3Path, tempFile.toFile())
             if (awsKmsKeyId != null) {
                 logger.debug("Using AWS KMS Key ID for SSE: {}", awsKmsKeyId)
                 putRequest.sseAwsKeyManagementParams = SSEAwsKeyManagementParams(awsKmsKeyId)
             }
             s3.putObject(putRequest)
-            logger.info("Data uploaded to S3: $s3Path")
+            logger.info("Data uploaded to S3: s3://${s3Uri.bucket}/$s3Path")
 
         } catch (e: IOException) {
             logger.warn("Failed to write output to path: {}", tempFile, e)
