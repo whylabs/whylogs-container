@@ -2,14 +2,17 @@
 * To build the docker image (locally):
 
 ```
-$ gw installDist
+$ MAVEN_TOKEN=xxxxx gw installDist
 $ docker build . -t whycontainer
 ```
 
 * Or run a single command:
 ```
-gw installDist && docker build . -t whycontainer
+gw installDist && MAVEN_TOKEN=xxxxx docker build . -t whycontainer
 ```
+
+You need to create an api token in Gitlab that has API permissions in order to authenticate with our private Gitlab
+repo that contains dependencies we consume here.
 
 ## Running the Docker image
 
