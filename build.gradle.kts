@@ -20,13 +20,10 @@ repositories {
         url = uri("https://gitlab.com/api/v4/projects/22420498/packages/maven")
         name = "Gitlab"
 
-        credentials(HttpHeaderCredentials::class) {
-            name = "Private-Token"
-            value = gitlabMavenToken
-        }
 
+        val headerName = if (System.getenv("CI_JOB_STAGE").isNullOrEmpty()) "Private-Token" else "Job-Token"
         credentials(HttpHeaderCredentials::class) {
-            name = "Job-Token"
+            name = headerName
             value = gitlabMavenToken
         }
 

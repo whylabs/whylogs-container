@@ -8,7 +8,7 @@ $ docker build . -t whycontainer
 
 * Or run a single command:
 ```
-gw installDist && MAVEN_TOKEN=xxxxx docker build . -t whycontainer
+MAVEN_TOKEN=xxxxx gw installDist && docker build . -t whycontainer
 ```
 
 You need to create an api token in Gitlab that has API permissions in order to authenticate with our private Gitlab
@@ -22,12 +22,12 @@ you can track at the same time (i.e. number of tag key-value combination)
 ```
 OUTPUT_PATH=s3://<your-bucket>/<prefix>
 WHYLOGS_PERIOD=HOURS (default is HOURS if unspecified. Supported values: MINUTES, HOURS, DAYS)
-AWS_REGION=<your bucket's AWS region>~~~~
-AWS_ACCESS_KEY_ID=<AWS access Key ID>
-AWS_SECRET_ACCESS_KEY=<AWS-ACCESS-KEY>
-AWS_SESSION_TOKEN=<your session token if you use something else but IAM user>
-AWS_KMS_KEY_ID=<your kms key - must be in the same region as your S3>
 JAVA_OPTS=-XX:+UseZGC -XX:+UnlockExperimentalVMOptions -XX:-ZUncommit -Xmx4G
+
+# Optional alternate api endpoint
+WHYLABS_API_ENDPOINT=http://localhost:8080
+WHYLABS_API_KEY=xxxxxx
+WHYLOGS_PERIOD=HOURS
 ```
 
 * Run the Docker image with the following command:
