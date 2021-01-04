@@ -29,10 +29,8 @@ private fun tagsToKey(tags: Map<String, String>): TagsKey {
 private val AllowedChronoUnits = setOf(ChronoUnit.HOURS, ChronoUnit.MINUTES, ChronoUnit.DAYS)
 
 class WhyLogsProfileManager(
-    outputPath: String,
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
     period: String?,
-    awsKmsKeyId: String? = null,
     currentTime: Instant = Instant.now(),
 ) {
 
@@ -45,7 +43,7 @@ class WhyLogsProfileManager(
     private var isRunning = false
 
     @Volatile
-    private var profiles: ConcurrentMap<TagsKey, DatasetProfile>
+    private var profiles: ConcurrentMap<TagsKey, ProfileEntry>
 
     @Volatile
     private var windowStartTime: Instant
@@ -63,21 +61,7 @@ class WhyLogsProfileManager(
         logger.info("Using time unit: {}", chronoUnit)
         val nextRun = currentTime.plus(1, chronoUnit).truncatedTo(chronoUnit)
         val initialDelay = nextRun.epochSecond - currentTime.epochSecond
-
-        writer = if (outputPath.startsWith("s3://")) {
-            logger.info("Using S3 writer")
-
-            if (awsKmsKeyId != null) {
-                logger.info("Using AWS S3 Server Side Encryption with KMS key: {}", awsKmsKeyId)
-            } else {
-                logger.info("Using AWS without KMS encryption")
-            }
-            S3Writer(outputPath, awsKmsKeyId)
-        } else {
-            LocalWriter(outputPath)
-        }
-
-        logger.info("Using output path: {}", outputPath)
+        writer = SongbirdWriter()
         logger.info("Starting profile manager using time unit: {}", chronoUnit)
         profiles = ConcurrentHashMap()
         windowStartTime = currentTime.truncatedTo(chronoUnit)
@@ -87,13 +71,14 @@ class WhyLogsProfileManager(
             this::rotate,
             initialDelay,
             Duration.of(1, chronoUnit).seconds,
-            TimeUnit.SECONDS)
+            TimeUnit.SECONDS
+        )
         isRunning = true
 
         Runtime.getRuntime().addShutdownHook(Thread(this::stop))
     }
 
-    fun getProfile(tags: Map<String, String>): DatasetProfile {
+    fun getProfile(tags: Map<String, String>, orgId: String, datasetId: String): ProfileEntry {
         if (!isRunning) {
             throw IllegalAccessException("ProfileManager isn't running yet")
         }
@@ -102,7 +87,12 @@ class WhyLogsProfileManager(
         try {
             return profiles.computeIfAbsent(mapKey) {
                 logger.info("Create new profile for key: {}", it)
-                DatasetProfile(sessionId, sessionTime, windowStartTime, tags, mapOf())
+                ProfileEntry(
+                    profile = DatasetProfile(sessionId, sessionTime, windowStartTime, tags, mapOf()),
+                    orgId = orgId,
+                    datasetId = datasetId
+                )
+
             }
         } finally {
             lock.unlock()
@@ -141,7 +131,10 @@ class WhyLogsProfileManager(
         for (item in profiles) {
             val hexSuffix = DigestUtils.md5Hex(item.key.makeString()).substring(0, 10)
             val outputFile = "profile.${windowStartTime.toEpochMilli()}.${hexSuffix}.bin"
-            writer.write(item.value, outputFile)
+            val (profile, orgId, datasetId) = item.value
+            writer.write(profile, outputFile, orgId, datasetId)
         }
     }
 }
+
+data class ProfileEntry(val profile: DatasetProfile, val orgId: String, val datasetId: String)

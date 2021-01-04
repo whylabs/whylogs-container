@@ -15,9 +15,7 @@ build:
       - build/install/whylogs-container
     expire_in: 1 week
   only:
-    refs:
-      - merge_requests
-      - mainline
+    - merge_requests
 
 publish:
   stage: publish
@@ -32,5 +30,4 @@ publish:
   needs: ["build"]
   only:
     refs:
-      - merge_requests
       - mainline

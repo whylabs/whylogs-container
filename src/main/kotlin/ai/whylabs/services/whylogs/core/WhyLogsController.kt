@@ -20,14 +20,7 @@ internal val DummyObject = Object()
 class WhyLogsController {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val mapper = ObjectMapper()
-
-    private val outputPath = System.getenv("OUTPUT_PATH") ?: "/opt/whylogs/output"
-
-    private val profileManager = WhyLogsProfileManager(
-        outputPath,
-        awsKmsKeyId = System.getenv("AWS_KMS_KEY_ID"),
-        period = System.getenv("WHYLOGS_PERIOD"),
-    )
+    private val profileManager = WhyLogsProfileManager(period = EnvVars.period)
 
     fun preprocess(ctx: Context) {
         try {
@@ -44,7 +37,8 @@ class WhyLogsController {
         summary = "Log a map of feature names and values or an array of data points",
         operationId = "track",
         tags = ["whylogs"],
-        requestBody = OpenApiRequestBody(content = [OpenApiContent(type = ContentType.JSON)], description = """
+        requestBody = OpenApiRequestBody(
+            content = [OpenApiContent(type = ContentType.JSON)], description = """
 Pass the input in single entry format (a JSON object) or a multiple entry format.
 * Set `single` key if you're passing a single data point with multiple features
 * Set `multiple` key if you're passing multiple data at once. Here are the required fields:
@@ -53,7 +47,7 @@ Pass the input in single entry format (a JSON object) or a multiple entry format
 Example: 
 ```
 {
-  "datasetName": "demo-model",
+  "datasetId": "demo-model",
   "tags": {
     "tagKey": "tagValue"
   },
@@ -81,7 +75,7 @@ df.to_json(orient="split")
 Here is an example from the output above
 ```json
 {
-  "datasetName": "demo-model",
+  "datasetId": "demo-model",
   "tags": {
     "tag1": "value1"
   },
@@ -111,7 +105,8 @@ Here is an example from the output above
   }
 }
 ```
-"""),
+"""
+        ),
         responses = [OpenApiResponse("200"), OpenApiResponse("400", description = "Bad or invalid input body")]
     )
     fun track(ctx: Context) {
@@ -123,10 +118,10 @@ Here is an example from the output above
         }
         logger.debug("Request body: {}", body)
 
-        val inputDatasetName = body.get("datasetName")?.textValue()
-        val datasetName = if (inputDatasetName.isNullOrBlank()) "default" else inputDatasetName
+        val inputDatasetName = body.get("datasetId")?.textValue()
+        val datasetId = if (inputDatasetName.isNullOrBlank()) "default" else inputDatasetName
         val jsonTags = body.get("tags")
-        val tags = mutableMapOf("Name" to datasetName)
+        val tags = mutableMapOf("Name" to datasetId)
         if (jsonTags?.isObject == true) {
             for (tag in jsonTags.fields()) {
                 tag.value.textValue()?.let { tags.putIfAbsent(tag.key, it) }
@@ -135,7 +130,8 @@ Here is an example from the output above
             logger.warn("Tags field is not a mapping. Ignoring tagging")
         }
 
-        val profile = profileManager.getProfile(tags)
+        val profileEntry = profileManager.getProfile(tags, EnvVars.orgId, datasetId)
+        val profile = profileEntry.profile
         val singleEntry = body.get("single")
         val multipleEntries = body.get("multiple")
 
