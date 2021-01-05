@@ -221,8 +221,6 @@ Here is an example from the output above
             JsonNodeType.NULL -> profile.track(featureName, null)
             JsonNodeType.MISSING -> {
             }
-            else -> {
-            }
         }
     }
 }
