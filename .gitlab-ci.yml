@@ -15,6 +15,7 @@ build:
       - build/install/whylogs-container
     expire_in: 1 week
   only:
+    - mainline
     - merge_requests
 
 publish:
@@ -29,5 +30,4 @@ publish:
     - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
   needs: ["build"]
   only:
-    refs:
-      - mainline
+    - mainline
