@@ -15,6 +15,8 @@ class EnvVars {
         val expectedApiKey =
             System.getenv("CONTAINER_API_KEY")
                 ?: throw IllegalArgumentException("Must supply env var CONTAINER_API_KEY")
+
+        val port = System.getenv("PORT")?.toInt() ?: 8080
     }
 }
 
