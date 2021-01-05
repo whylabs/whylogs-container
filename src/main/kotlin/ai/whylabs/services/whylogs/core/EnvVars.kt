@@ -11,6 +11,10 @@ class EnvVars {
             System.getenv("WHYLABS_API_KEY") ?: throw IllegalArgumentException("Must supply env var WHYLABS_API_KEY")
         val period =
             System.getenv("WHYLOGS_PERIOD") ?: throw IllegalArgumentException("Must supply env var WHYLOGS_PERIOD")
+
+        val expectedApiKey =
+            System.getenv("CONTAINER_API_KEY")
+                ?: throw IllegalArgumentException("Must supply env var CONTAINER_API_KEY")
     }
 }
 

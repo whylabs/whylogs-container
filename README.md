@@ -28,6 +28,9 @@ JAVA_OPTS=-XX:+UseZGC -XX:+UnlockExperimentalVMOptions -XX:-ZUncommit -Xmx4G
 WHYLABS_API_ENDPOINT=http://localhost:8080
 WHYLABS_API_KEY=xxxxxx
 WHYLOGS_PERIOD=HOURS
+# Specify the api key that will be checked on each request. The header API key
+# must match this value.
+CONTAINER_API_KEY=secret-key
 ```
 
 * Run the Docker image with the following command:
