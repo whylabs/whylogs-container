@@ -5,17 +5,21 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeType
 import com.whylogs.core.DatasetProfile
 import io.javalin.http.Context
+import io.javalin.http.UnauthorizedResponse
 import io.javalin.plugin.openapi.annotations.ContentType
 import io.javalin.plugin.openapi.annotations.HttpMethod
 import io.javalin.plugin.openapi.annotations.OpenApi
 import io.javalin.plugin.openapi.annotations.OpenApiContent
+import io.javalin.plugin.openapi.annotations.OpenApiParam
 import io.javalin.plugin.openapi.annotations.OpenApiRequestBody
 import io.javalin.plugin.openapi.annotations.OpenApiResponse
 import org.slf4j.LoggerFactory
+import java.lang.IllegalArgumentException
 
 
 internal const val AttributeKey = "jsonObject"
 internal val DummyObject = Object()
+private const val apiKeyHeader = "X-API-Key"
 
 class WhyLogsController {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -23,6 +27,15 @@ class WhyLogsController {
     private val profileManager = WhyLogsProfileManager(period = EnvVars.period)
 
     fun preprocess(ctx: Context) {
+
+        // This shouldn't actually happen. Swagger will take care of the validation.
+        val apiKey = ctx.header(apiKeyHeader)
+            ?: throw IllegalArgumentException("Missing api key in request")
+
+        if (apiKey != EnvVars.expectedApiKey) {
+            throw UnauthorizedResponse("Invalid API key")
+        }
+
         try {
             val parser = mapper.createParser(ctx.req.inputStream)
             val objNode = parser.readValueAsTree<JsonNode>()
@@ -33,6 +46,7 @@ class WhyLogsController {
     }
 
     @OpenApi(
+        headers = [OpenApiParam(name = apiKeyHeader, required = true)],
         method = HttpMethod.POST,
         summary = "Log a map of feature names and values or an array of data points",
         operationId = "track",
