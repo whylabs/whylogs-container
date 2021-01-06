@@ -35,5 +35,27 @@ CONTAINER_API_KEY=secret-key
 
 * Run the Docker image with the following command:
 ```
-docker run -it --rm -p 127.0.0.1:8080:8080 --env-file local.env whycontainer
+docker run -it --rm -p 127.0.0.1:8080:8080 --env-file local.env --name whycontainer whycontainer
 ```
+
+The container runs supervisord as its main command so it won't ever exit on its
+own. You can manipulate the rest server from within the container without
+shutting down the container by using supervisord as follows.
+
+```
+# Connect to the running container, assuming you used `--name whycontainer` to run it.
+docker exec -it whycontainer sh
+
+# Restart the server
+./scripts/restart-server.sh
+
+# The script is a covenience around supervisorctl. You can manually run
+supervisorctl -c /opt/whylogs/supervisord.conf restart app
+supervisorctl -c /opt/whylogs/supervisord.conf start app
+supervisorctl -c /opt/whylogs/supervisord.conf stop app
+```
+
+The rest server does make use of temporary files on its file system so restarting
+the rest server without terminating the container does have the advantage of
+definitely not wiping out the ephemeral storage if it would have resulted in the
+container getting destroyed.
