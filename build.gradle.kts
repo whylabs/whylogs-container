@@ -33,6 +33,25 @@ repositories {
     }
 }
 
+tasks.test {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
+}
+
+tasks.withType<KotlinCompile>().configureEach {
+    kotlinOptions {
+        // config JVM target to 1.8 for kotlin compilation tasks
+        jvmTarget = "1.8"
+        // Silence warnings about using Kotlin's actor and similar types. They don't yet have
+        // replacements that Kotlin recommends using. When that changes we can update them.
+        freeCompilerArgs += listOf(
+            "-Xuse-experimental=kotlinx.coroutines.ObsoleteCoroutinesApi"
+        )
+    }
+}
+
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.4.10")
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.4.10")
@@ -45,13 +64,17 @@ dependencies {
     implementation("ai.whylabs:whylogs-core:0.1.0")
     implementation("org.apache.commons:commons-lang3:3.11")
     implementation("com.amazonaws:aws-java-sdk-s3:1.11.+")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
     implementation("ai.whylabs:songbird-client:0.1-SNAPSHOT")
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:2.13.3")
-    testImplementation(kotlin("test-testng"))
+    implementation("org.xerial:sqlite-jdbc:3.34.0")
+
+    testImplementation("org.assertj:assertj-core:3.12.2")
+    testImplementation(platform("org.junit:junit-bom:5.7.0"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
 }
-tasks.withType<KotlinCompile>() {
-    kotlinOptions.jvmTarget = "1.8"
-}
+
 application {
     mainClassName = "ai.whylabs.services.whylogs.MainKt"
 }
+

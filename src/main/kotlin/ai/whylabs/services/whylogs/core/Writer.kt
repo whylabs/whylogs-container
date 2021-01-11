@@ -13,10 +13,11 @@ class SongbirdWriter : Writer {
     private val songbirdClientManager = SongbirdClientManager()
 
     override fun write(profile: DatasetProfile, outputFileName: String, orgId: String, datasetId: String) {
+        // TODO seems wasteful to have to log to disk first. They're ready to go as-is. Might need a new songbird API.
         val tempFile = Files.createTempFile("whylogs", "profile")
         logger.debug("Write profile to temp path: {}", tempFile.toAbsolutePath())
         try {
-            logger.info("Sending $outputFileName to whylabs")
+            logger.info("Sending $outputFileName to whylabs $orgId")
             songbirdClientManager.logApi.log(
                 orgId,
                 datasetId,
@@ -24,9 +25,6 @@ class SongbirdWriter : Writer {
                 emptyList(),
                 tempFile.toFile()
             )
-
-        } catch (e: Exception) {
-            logger.warn("Failed to write to whylabs {}", tempFile, e)
         } finally {
             logger.debug("Clean up temp file: {}", tempFile)
             Files.deleteIfExists(tempFile)

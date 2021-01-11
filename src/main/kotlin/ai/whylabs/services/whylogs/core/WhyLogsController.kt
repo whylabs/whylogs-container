@@ -13,6 +13,7 @@ import io.javalin.plugin.openapi.annotations.OpenApiContent
 import io.javalin.plugin.openapi.annotations.OpenApiParam
 import io.javalin.plugin.openapi.annotations.OpenApiRequestBody
 import io.javalin.plugin.openapi.annotations.OpenApiResponse
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.lang.IllegalArgumentException
 
@@ -130,6 +131,7 @@ Here is an example from the output above
             return400(ctx, "Missing or invalid body request")
             return
         }
+
         logger.debug("Request body: {}", body)
 
         val inputDatasetName = body.get("datasetId")?.textValue()
@@ -144,20 +146,23 @@ Here is an example from the output above
             logger.warn("Tags field is not a mapping. Ignoring tagging")
         }
 
-        val profileEntry = profileManager.getProfile(tags, EnvVars.orgId, datasetId)
-        val profile = profileEntry.profile
-        val singleEntry = body.get("single")
-        val multipleEntries = body.get("multiple")
+        runBlocking {
+            profileManager.getProfile(tags, EnvVars.orgId, datasetId) { profileEntry ->
+                logger.debug("Updating the profile for $inputDatasetName")
+                val profile = profileEntry.profile
+                val singleEntry = body.get("single")
+                val multipleEntries = body.get("multiple")
 
-        if (singleEntry?.isObject != true && multipleEntries?.isObject != true) {
-            return400(ctx, "Missing input data")
-        }
-        if (singleEntry?.isObject == true) {
-            trackSingle(singleEntry, ctx, profile)
-            return
-        }
-        if (multipleEntries?.isObject == true) {
-            trackMultiple(multipleEntries, ctx, profile)
+                if (singleEntry?.isObject != true && multipleEntries?.isObject != true) {
+                    return400(ctx, "Missing input data")
+                }
+
+                if (singleEntry?.isObject == true) {
+                    trackSingle(singleEntry, ctx, profile)
+                } else if (multipleEntries?.isObject == true) {
+                    trackMultiple(multipleEntries, ctx, profile)
+                }
+            }
         }
     }
 

@@ -30,6 +30,8 @@ fun main(): Unit = try {
         }
     }.start(EnvVars.port)
 
+    // TODO make a call to list models to test the api key on startup as a health check
+
     logger.info("Checkout Swagger UI at http://localhost:8080/swagger-ui")
 } catch (t: Throwable) {
     // Need to manually shut down here because our manager hooks itself up to runtime hooks

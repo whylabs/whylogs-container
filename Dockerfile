@@ -4,7 +4,9 @@ COPY build/install/whylogs-container /opt/whylogs
 COPY supervisord.conf /opt/whylogs
 COPY scripts/ /opt/whylogs/scripts/
 
-RUN apk update && apk add --no-cache python3 supervisor
+# Sqlite will come in handy for debugging if something goes terribly wrong. We use
+# a sqlite database to persist dataset profiles across server runs.
+RUN apk update && apk add --no-cache python3 supervisor sqlite
 
 EXPOSE 8080
 WORKDIR /opt/whylogs
