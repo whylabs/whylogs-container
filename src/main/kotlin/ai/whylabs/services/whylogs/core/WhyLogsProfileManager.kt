@@ -113,18 +113,18 @@ class WhyLogsProfileManager(
 
     private suspend fun writeOutProfiles() {
         logger.info("Writing out profiles for window: {}", windowStartTime)
-        profiles.reset { current ->
-            current.filter { item ->
-                logger.info("Writing out profiles for tags: {}", item.key)
-                val hexSuffix = DigestUtils.md5Hex(item.key.makeString()).substring(0, 10)
+        profiles.reset { stagedProfiles ->
+            stagedProfiles.filter { profileEntry ->
+                logger.info("Writing out profiles for tags: {}", profileEntry.key)
+                val hexSuffix = DigestUtils.md5Hex(profileEntry.key.makeString()).substring(0, 10)
                 val outputFile = "profile.${windowStartTime.toEpochMilli()}.${hexSuffix}.bin"
-                val (profile, orgId, datasetId) = item.value
+                val (profile, orgId, datasetId) = profileEntry.value
 
                 try {
                     writer.write(profile, outputFile, orgId, datasetId)
                     false
                 } catch (e: Exception) {
-                    logger.error("Failed to write to whylabs. Going to keep profile ${item.key} and later.", e)
+                    logger.error("Failed to write to whylabs. Going to keep profile ${profileEntry.key} and later.", e)
                     true
                 }
             }
