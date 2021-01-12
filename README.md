@@ -19,8 +19,8 @@ repo that contains dependencies we consume here.
 * You should prepare a `local.env` file in your workspace with the following content. Make sure you configure
 the heap to the appropriate size of your container. The heap size also determines how many concurrent dataset profiles
 you can track at the same time (i.e. number of tag key-value combination)
+
 ```
-OUTPUT_PATH=s3://<your-bucket>/<prefix>
 WHYLOGS_PERIOD=HOURS (default is HOURS if unspecified. Supported values: MINUTES, HOURS, DAYS)
 JAVA_OPTS=-XX:+UseZGC -XX:+UnlockExperimentalVMOptions -XX:-ZUncommit -Xmx4G
 
@@ -34,9 +34,12 @@ CONTAINER_API_KEY=secret-key
 ```
 
 * Run the Docker image with the following command:
+
 ```
 docker run -it --rm -p 127.0.0.1:8080:8080 --env-file local.env --name whycontainer whycontainer
 ```
+
+## Controlling the live REST service
 
 The container runs supervisord as its main command so it won't ever exit on its
 own. You can manipulate the rest server from within the container without
@@ -56,6 +59,28 @@ supervisorctl -c /opt/whylogs/supervisord.conf stop app
 ```
 
 The rest server does make use of temporary files on its file system so restarting
-the rest server without terminating the container does have the advantage of
-definitely not wiping out the ephemeral storage if it would have resulted in the
-container getting destroyed.
+the rest server without terminating the container has the advantage of not
+wiping out the ephemeral storage if it would have resulted in the container
+getting destroyed.
+
+## Inspecting the persistent storage
+
+The persistence is accomplished through a map abstraction that eventually calls
+sqlite. You can directly interface with sqlite in the container to verify its
+contents.
+
+```
+# Connect to the running container, assuming you used `--name whycontainer` to run it.
+docker exec -it whycontainer sh
+
+# Dump the content of the sqlite databse
+./scripts/query-profiles.sh
+
+# The script just calls sqlite with the locaiton of the db and a query
+sqlite3 /tmp/profile-entries-map.sqlite 'select * from items;'
+```
+
+The db is pretty simple. Just a key and value column where the values are
+serialized dataset profiles. The dataset profiles are base64 encoded strings
+based on the output of the protobuf serialization. Everything else is human
+readable.
