@@ -124,7 +124,7 @@ class WhyLogsProfileManager(
                     writer.write(profile, outputFile, orgId, datasetId)
                     false
                 } catch (e: Exception) {
-                    logger.error("Failed to write to whylabs. Going to keep profile ${profileEntry.key} and later.", e)
+                    logger.error("Failed writing to whylabs. Keeping profile ${profileEntry.key} to try later.", e)
                     true
                 }
             }
