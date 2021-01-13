@@ -137,7 +137,7 @@ Here is an example from the output above
         val inputDatasetName = body.get("datasetId")?.textValue()
         val datasetId = if (inputDatasetName.isNullOrBlank()) "default" else inputDatasetName
         val jsonTags = body.get("tags")
-        val tags = mutableMapOf("Name" to datasetId)
+        val tags = mutableMapOf<String, String>()
         if (jsonTags?.isObject == true) {
             for (tag in jsonTags.fields()) {
                 tag.value.textValue()?.let { tags.putIfAbsent(tag.key, it) }
