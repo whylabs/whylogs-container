@@ -84,3 +84,18 @@ The db is pretty simple. Just a key and value column where the values are
 serialized dataset profiles. The dataset profiles are base64 encoded strings
 based on the output of the protobuf serialization. Everything else is human
 readable.
+
+
+## Monitoring traffick
+
+Sometimes it's useful to monitor network traffic if you're having issues
+actually connecting to songbird or some request is failing for a mysterious
+reason. You can use `ngrep` to show the headers, url, etc.
+
+```
+# Connect to the container
+docker exec -it whycontainer sh
+
+ngrep -q -W byline
+```
+
