@@ -8,7 +8,7 @@
 
     </Appenders>
     <Loggers>
-        <Logger name="ai.whylabs" level="debug">
+        <Logger name="ai.whylabs" level="info">
             <AppenderRef ref="Console"/>
         </Logger>
 

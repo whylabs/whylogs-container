@@ -32,7 +32,7 @@ class SongbirdWriter : Writer {
             songbirdClientManager.logApi.log(
                 orgId,
                 datasetId,
-                profile.dataTimestamp.epochSecond,
+                profile.dataTimestamp.toEpochMilli(),
                 emptyList(),
                 if (tags.isEmpty()) null else mapper.writeValueAsString(tags),
                 tempFile.toFile()
