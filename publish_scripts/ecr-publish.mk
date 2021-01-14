@@ -1,7 +1,9 @@
 #!/usr/bin/make -f
 
 CONTAINER_NAME := whylogs-container
-ECR_REPO := 003872937983.dkr.ecr.us-west-2.amazonaws.com/$(CONTAINER_NAME)
+ECR_ENDPOINT := 003872937983.dkr.ecr.us-east-1.amazonaws.com
+ECR_REGION := us-east-1
+ECR_REPO := $(ECR_ENDPOINT)/$(CONTAINER_NAME)
 DATE_TAG := $(shell date +%Y-%m-%d_%H-%M-%S)
 
 define i
@@ -32,5 +34,5 @@ build: ## Build the whylogs-container locally
 	docker build . -t $(CONTAINER_NAME):$(DATE_TAG)
 
 authenticate: ## Authenticate with ECR so you can push and pull
-	@$(call i, Authenticating local docker with ECR. You may need to add yourself to https://us-west-2.console.aws.amazon.com/ecr/repositories/private/003872937983/whylogs-container/permissions/?region=us-west-2.)
-	aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 003872937983.dkr.ecr.us-west-2.amazonaws.com
+	@$(call i, Authenticating local docker with ECR. You may need to add yourself to https://console.aws.amazon.com/ecr/repositories/private/003872937983/whylogs-container/permissions/?region=us-east-1)
+	aws ecr get-login-password --region $(ECR_REGION) | docker login --username AWS --password-stdin $(ECR_ENDPOINT)

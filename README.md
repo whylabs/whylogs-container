@@ -104,7 +104,7 @@ ngrep -q -W byline
 You can use the `./publish_scripts/ecr-publish.mk` script to publish the
 container to our prod ECR. You'll have to make sure the IAM user that you use
 with the AWS CLI is allowed to push images by adding yourself to
-`https://us-west-2.console.aws.amazon.com/ecr/repositories/private/003872937983/whylogs-container/permissions/?region=us-west-2`.
+`https://console.aws.amazon.com/ecr/repositories/private/003872937983/whylogs-container/permissions/?region=us-east-1`.
 
 ```
 ./publish_scripts/ecr-publish.mk authenticate
@@ -114,7 +114,7 @@ MAVEN_TOKEN=xxxxx ./publish_scripts/ecr-publish.mk publish
 This will force a build at publish time to make sure that you're pushing the
 most recent image so you'll need to supply your `MAVEN_TOKEN` again. Images are
 tagged with the current date and time and they're visible at
-`https://us-west-2.console.aws.amazon.com/ecr/repositories/private/003872937983/whylogs-container?region=us-west-2`.
+`https://console.aws.amazon.com/ecr/repositories/private/003872937983/whylogs-container?region=us-east-1`.
 We don't use a `latest` tag because AWS ECR's immutable tag feature doesn't
 permit it. The value of having immutable tags was higher than the convenience of
 being able to type `latest`, though it isn't clear why they don't make an
