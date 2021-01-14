@@ -1,11 +1,5 @@
 package ai.whylabs.services.whylogs.core
 
-import ai.whylabs.services.whylogs.persistent.map.PersistentMap
-import ai.whylabs.services.whylogs.persistent.map.SqliteMapWriteLayer
-import com.whylogs.core.DatasetProfile
-import kotlinx.coroutines.runBlocking
-import org.apache.commons.codec.digest.DigestUtils
-import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -13,6 +7,12 @@ import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import ai.whylabs.services.whylogs.persistent.map.PersistentMap
+import ai.whylabs.services.whylogs.persistent.map.SqliteMapWriteLayer
+import com.whylogs.core.DatasetProfile
+import kotlinx.coroutines.runBlocking
+import org.apache.commons.codec.digest.DigestUtils
+import org.slf4j.LoggerFactory
 
 
 data class TagsKey(val data: List<Pair<String, String>>) {
@@ -76,12 +76,17 @@ class WhyLogsProfileManager(
         tags: Map<String, String>,
         orgId: String,
         datasetId: String,
-        block: (ProfileEntry) -> Unit
+        block: (ProfileEntry) -> Unit,
     ) {
         val mapKey = tagsToKey(tags)
         profiles.set(mapKey) { current ->
+            val datasetTags = mapOf(DatasetIdTag to datasetId, OrgIdTag to orgId)
             val profileEntry = current ?: ProfileEntry(
-                profile = DatasetProfile(sessionId, sessionTime, windowStartTime, tags, mapOf()),
+                profile = DatasetProfile(sessionId,
+                    sessionTime,
+                    windowStartTime,
+                    tags + datasetTags,
+                    mapOf()),
                 orgId = orgId,
                 datasetId = datasetId
             )

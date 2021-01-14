@@ -15,12 +15,15 @@ import io.javalin.plugin.openapi.annotations.OpenApiRequestBody
 import io.javalin.plugin.openapi.annotations.OpenApiResponse
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import java.lang.IllegalArgumentException
 
 
 internal const val AttributeKey = "jsonObject"
 internal val DummyObject = Object()
 private const val apiKeyHeader = "X-API-Key"
+
+const val SegmentTagPrefix = "whylabs.segment."
+const val DatasetIdTag = "datasetId"
+const val OrgIdTag = "orgId"
 
 class WhyLogsController {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -140,7 +143,7 @@ Here is an example from the output above
         val tags = mutableMapOf<String, String>()
         if (jsonTags?.isObject == true) {
             for (tag in jsonTags.fields()) {
-                tag.value.textValue()?.let { tags.putIfAbsent(tag.key, it) }
+                tag.value.textValue()?.let { tags.putIfAbsent("$SegmentTagPrefix${tag.key}", it) }
             }
         } else if (jsonTags?.isNull == false) {
             logger.warn("Tags field is not a mapping. Ignoring tagging")

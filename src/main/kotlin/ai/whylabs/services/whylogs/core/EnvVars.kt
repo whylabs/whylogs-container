@@ -1,11 +1,9 @@
 package ai.whylabs.services.whylogs.core
 
-import java.lang.IllegalArgumentException
-
 class EnvVars {
 
     companion object {
-        val whylabsApiEndpoint = System.getenv("WHYLABS_API_ENDPOINT").orDefault("api.whylabsapp.com")
+        val whylabsApiEndpoint = System.getenv("WHYLABS_API_ENDPOINT") ?: "https://api.whylabsapp.com"
         val orgId = System.getenv("ORG_ID") ?: throw IllegalArgumentException("Must supply env var ORG_ID")
         val whylabsApiKey =
             System.getenv("WHYLABS_API_KEY") ?: throw IllegalArgumentException("Must supply env var WHYLABS_API_KEY")
@@ -19,5 +17,3 @@ class EnvVars {
         val port = System.getenv("PORT")?.toInt() ?: 8080
     }
 }
-
-private fun String.orDefault(other: String) = if (isNullOrBlank()) other else this

@@ -6,6 +6,7 @@ import ai.whylabs.songbird.invoker.Configuration
 import ai.whylabs.songbird.invoker.auth.ApiKeyAuth
 import org.slf4j.LoggerFactory
 
+private const val ApiKeyIdLength = 10
 
 class SongbirdClientManager {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -18,7 +19,7 @@ class SongbirdClientManager {
 
         // Configure API key authorization: ApiKeyAuth
         val apiKeyAuth = defaultClient.getAuthentication("ApiKeyAuth") as ApiKeyAuth
-        logger.warn("Using ${EnvVars.whylabsApiKey}")
+        logger.info("Using WhyLabs API key ID: ${EnvVars.whylabsApiKey.substring(0, ApiKeyIdLength)}")
         apiKeyAuth.apiKey = EnvVars.whylabsApiKey
     }
 }
