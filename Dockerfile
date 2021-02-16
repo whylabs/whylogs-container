@@ -11,4 +11,4 @@ RUN apk update && apk add --no-cache python3 supervisor sqlite ngrep
 EXPOSE 8080
 WORKDIR /opt/whylogs
 
-ENTRYPOINT ["supervisord", "-c", "/opt/whylogs/supervisord.conf"]
+CMD ["supervisord", "-c", "/opt/whylogs/supervisord.conf"]
