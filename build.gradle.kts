@@ -59,7 +59,7 @@ dependencies {
     implementation("org.webjars:swagger-ui:3.24.3")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.10.1")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.10.1")
-    implementation("ai.whylabs:whylogs-java-core:0.1.2-b0")
+    implementation("ai.whylabs:whylogs-java-core:0.1.2-b1")
     implementation("org.apache.commons:commons-lang3:3.11")
     implementation("com.amazonaws:aws-java-sdk-s3:1.11.+")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
