@@ -44,7 +44,7 @@ tasks.withType<KotlinCompile>().configureEach {
         jvmTarget = "1.8"
         // Silence warnings about using Kotlin's actor and similar types. They don't yet have
         // replacements that Kotlin recommends using. When that changes we can update them.
-        freeCompilerArgs += listOf(
+        freeCompilerArgs = freeCompilerArgs + listOf(
             "-Xuse-experimental=kotlinx.coroutines.ObsoleteCoroutinesApi"
         )
     }
@@ -59,14 +59,18 @@ dependencies {
     implementation("org.webjars:swagger-ui:3.24.3")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.10.1")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.10.1")
-    implementation("ai.whylabs:whylogs-java-core:0.1.2-b1")
     implementation("org.apache.commons:commons-lang3:3.11")
     implementation("com.amazonaws:aws-java-sdk-s3:1.11.+")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
-    implementation("ai.whylabs:songbird-client:0.1-SNAPSHOT")
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:2.13.3")
     implementation("org.xerial:sqlite-jdbc:3.34.0")
 
+    // WhyLabs
+    implementation("ai.whylabs:whylogs-java-core:0.1.2-b3")
+    implementation("ai.whylabs:songbird-client:0.1-SNAPSHOT")
+
+    // testing
+    testImplementation("io.mockk:mockk:1.10.6")
     testImplementation("org.assertj:assertj-core:3.12.2")
     testImplementation(platform("org.junit:junit-bom:5.7.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -75,4 +79,3 @@ dependencies {
 application {
     mainClassName = "ai.whylabs.services.whylogs.MainKt"
 }
-
