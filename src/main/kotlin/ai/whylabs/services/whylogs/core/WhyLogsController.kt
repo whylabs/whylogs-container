@@ -25,10 +25,13 @@ const val SegmentTagPrefix = "whylabs.segment."
 const val DatasetIdTag = "datasetId"
 const val OrgIdTag = "orgId"
 
-class WhyLogsController {
+class WhyLogsController(
+    period: String = EnvVars.period,
+    private val profileManager: WhyLogsProfileManager = WhyLogsProfileManager(period = period),
+    private val debug: Boolean = EnvVars.debug,
+) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val mapper = ObjectMapper()
-    private val profileManager = WhyLogsProfileManager(period = EnvVars.period)
 
     fun preprocess(ctx: Context) {
 
@@ -135,7 +138,7 @@ Here is an example from the output above
             return
         }
 
-        logger.debug("Request body: {}", body)
+        logDebug("Request body: {}", body)
 
         val inputDatasetName = body.get("datasetId")?.textValue()
         val datasetId = if (inputDatasetName.isNullOrBlank()) "default" else inputDatasetName
@@ -151,7 +154,7 @@ Here is an example from the output above
 
         runBlocking {
             profileManager.getProfile(tags, EnvVars.orgId, datasetId) { profileEntry ->
-                logger.debug("Updating the profile for $inputDatasetName")
+                logDebug("Updating the profile for $inputDatasetName")
                 val profile = profileEntry.profile
                 val singleEntry = body.get("single")
                 val multipleEntries = body.get("multiple")
@@ -169,7 +172,7 @@ Here is an example from the output above
         }
     }
 
-    private fun trackMultiple(
+    internal fun trackMultiple(
         multipleEntries: JsonNode,
         ctx: Context,
         profile: DatasetProfile,
@@ -182,11 +185,19 @@ Here is an example from the output above
             return
         }
         val features = featuresJson.map { value -> value.textValue() }.toList()
-        logger.debug("Track multiple entries. Features: {}", features)
+        logDebug("Track multiple entries. Features: {}", features)
         for (entry in dataJson) {
             for (i in features.indices) {
                 trackInProfile(profile, features[i], entry.get(i))
             }
+        }
+    }
+
+    private fun logDebug(format: String, vararg args: Any) {
+        if (debug) {
+            logger.info(format, *args)
+        } else {
+            logger.debug(format, *args)
         }
     }
 
@@ -195,7 +206,7 @@ Here is an example from the output above
         ctx.result(message)
     }
 
-    private fun trackSingle(
+    internal fun trackSingle(
         inputMap: JsonNode,
         ctx: Context,
         profile: DatasetProfile,
@@ -218,6 +229,7 @@ Here is an example from the output above
     ) {
         when (value?.nodeType) {
             JsonNodeType.ARRAY, JsonNodeType.BINARY, JsonNodeType.POJO, JsonNodeType.OBJECT -> {
+                logger.warn("Received complex object for feature: ${featureName}. Type: ${value.nodeType}")
                 profile.track(
                     featureName,
                     DummyObject

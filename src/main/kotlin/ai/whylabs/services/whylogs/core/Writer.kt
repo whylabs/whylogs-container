@@ -2,6 +2,7 @@ package ai.whylabs.services.whylogs.core
 
 import java.nio.channels.FileChannel
 import java.nio.file.Files
+import ai.whylabs.songbird.invoker.ApiException
 import ai.whylabs.songbird.model.SegmentTag
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.whylogs.core.DatasetProfile
@@ -38,16 +39,20 @@ class SongbirdWriter : Writer {
             val size = FileChannel.open(tempFile).use { it.size() }
             val tagString = tags.joinToString(",") { "[${it.key}=${it.value}]" }
             logger.info("Pushing ${profile.tags[DatasetIdTag]}/$tagString/${profile.dataTimestamp} to WhyLabs $orgId. Size: $size bytes")
-            songbirdClientManager.logApi.log(
-                orgId,
-                datasetId,
-                profile.dataTimestamp.toEpochMilli(),
-                emptyList(),
-                if (tags.isEmpty()) null else mapper.writeValueAsString(tags),
-                tempFile.toFile()
-            )
+            try {
+                songbirdClientManager.logApi.log(
+                    orgId,
+                    datasetId,
+                    profile.dataTimestamp.toEpochMilli(),
+                    emptyList(),
+                    if (tags.isEmpty()) null else mapper.writeValueAsString(tags),
+                    tempFile.toFile()
+                )
+            } catch (e: ApiException) {
+                logger.error("Fail to send data to WhyLabs. Code: ${e.code}. Message: ${e.responseBody}")
+                throw e
+            }
             logger.info("Pushed ${profile.tags[DatasetIdTag]}/${tagString}/${profile.dataTimestamp} data successfully")
-
         } finally {
             logger.debug("Clean up temp file: {}", tempFile)
             Files.deleteIfExists(tempFile)

@@ -15,15 +15,15 @@ import org.apache.commons.codec.digest.DigestUtils
 import org.slf4j.LoggerFactory
 
 
-data class TagsKey(val data: List<Pair<String, String>>) {
+data class TagsKey(val orgId: String, val datasetId: String, val data: List<Pair<String, String>>) {
     fun makeString(): String {
-        return data.joinToString(",") { "${it.first}:${it.second}" }
+        return "$orgId/$datasetId/${data.joinToString(",") { "${it.first}:${it.second}" }}"
     }
 }
 
-private fun tagsToKey(tags: Map<String, String>): TagsKey {
+private fun tagsToKey(orgId: String, datasetId: String, tags: Map<String, String>): TagsKey {
     val data = tags.keys.sorted().map { tagKey -> Pair(tagKey, tags[tagKey].orEmpty()) }.toList()
-    return TagsKey(data)
+    return TagsKey(orgId, datasetId, data)
 }
 
 private val AllowedChronoUnits = setOf(ChronoUnit.HOURS, ChronoUnit.MINUTES, ChronoUnit.DAYS)
@@ -78,7 +78,7 @@ class WhyLogsProfileManager(
         datasetId: String,
         block: (ProfileEntry) -> Unit,
     ) {
-        val mapKey = tagsToKey(tags)
+        val mapKey = tagsToKey(orgId, datasetId, tags)
         profiles.set(mapKey) { current ->
             val datasetTags = mapOf(DatasetIdTag to datasetId, OrgIdTag to orgId)
             val profileEntry = current ?: ProfileEntry(
