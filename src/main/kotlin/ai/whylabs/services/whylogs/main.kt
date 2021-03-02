@@ -32,7 +32,7 @@ fun main(): Unit = try {
 
     // TODO make a call to list models to test the api key on startup as a health check
 
-    logger.info("Checkout Swagger UI at http://localhost:8080/swagger-ui")
+    logger.info("Checkout Swagger UI at http://localhost:${EnvVars.port}/swagger-ui")
 } catch (t: Throwable) {
     // Need to manually shut down here because our manager hooks itself up to runtime hooks
     // and starts a background thread. It would keep the JVM alive without javalin running.
