@@ -28,9 +28,17 @@ JAVA_OPTS=-XX:+UseZGC -XX:+UnlockExperimentalVMOptions -XX:-ZUncommit -Xmx4G
 WHYLABS_API_ENDPOINT=http://localhost:8080
 WHYLABS_API_KEY=xxxxxx
 WHYLOGS_PERIOD=HOURS
+
 # Specify the api key that will be checked on each request. The header API key
 # must match this value.
 CONTAINER_API_KEY=secret-key
+
+# Specify an organization ID that is accessible with your WHYLABS_API_KEY.
+ORG_ID=org-10
+
+# OPTIONAL additional set of strings considered to be null values.
+# Do not include spaces or quotes around the strings.
+# NULL_STRINGS=nil,NaN,nan,null
 ```
 
 * Run the Docker image with the following command:
@@ -86,7 +94,7 @@ based on the output of the protobuf serialization. Everything else is human
 readable.
 
 
-## Monitoring traffick
+## Monitoring traffic
 
 Sometimes it's useful to monitor network traffic if you're having issues
 actually connecting to songbird or some request is failing for a mysterious
