@@ -66,7 +66,7 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.34.0")
 
     // WhyLabs
-    implementation("ai.whylabs:whylogs-java-core:0.1.2-b4")
+    implementation("ai.whylabs:whylogs-java-core:0.1.2-b7")
     implementation("ai.whylabs:songbird-client:0.1-SNAPSHOT")
 
     // testing
