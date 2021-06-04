@@ -8,6 +8,7 @@ import kotlinx.coroutines.withTimeout
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("queueActor")
+private const val defaultTimeoutMs = 10_000L
 
 internal sealed class PersistentMapMessage<K, V>(val done: CompletableDeferred<V?>) {
 
@@ -63,7 +64,7 @@ private suspend fun <K, V> get(
     options: MapMessageHandlerOptions<K, V>,
     message: PersistentMapMessage.GetMessage<K, V>
 ) {
-    withTimeout(10_000) {
+    withTimeout(defaultTimeoutMs) {
         logger.debug("Getting item $message.key")
         val item = options.writeLayer.get(message.key)
         message.done.complete(item)
@@ -75,18 +76,21 @@ private suspend fun <K, V> set(
     options: MapMessageHandlerOptions<K, V>,
     message: PersistentMapMessage.SetMessage<K, V>
 ) {
-    withTimeout(10_000) {
+    withTimeout(defaultTimeoutMs) {
+        logger.debug("Looking up current item's value")
         val currentItem = options.writeLayer.get(message.key)
 
-        // Relay the current state of the item
+        logger.debug("Relaying the current state of the item")
         message.currentItem.complete(currentItem)
 
-        // Wait for them to make up their mind
+        logger.debug("Waiting for consumer to process item")
         val newItem = message.processingDone.await()
 
         if (newItem == null) {
+            logger.debug("Deleting the item.")
             options.writeLayer.remove(message.key)
         } else {
+            logger.debug("Updating the item.")
             options.writeLayer.set(message.key, newItem)
         }
 
@@ -99,22 +103,26 @@ private suspend fun <K, V> reset(
     options: MapMessageHandlerOptions<K, V>,
     message: PersistentMapMessage.ResetMessage<K, V>
 ) {
-    withTimeout(10_000) {
+    withTimeout(defaultTimeoutMs) {
+        logger.debug("Reading everything from the map")
         val everything = options.writeLayer.getAll()
 
-        // Send everything to the consumer
+        logger.debug("Returning everything to the consumer")
         message.everything.complete(everything)
 
         // Get the updated state
+        logger.debug("Wait for the consumer to finish processing new map state.")
         val updatedValues = message.processingDone.await()
 
         // If its the same ref then there was no change so we're done
         if (everything === updatedValues) {
+            logger.debug("No changes")
             message.done.complete(null)
             return@withTimeout
         }
 
         // Reset the value to this map
+        logger.debug("Writing the updated value")
         options.writeLayer.reset(updatedValues)
 
         message.done.complete(null)

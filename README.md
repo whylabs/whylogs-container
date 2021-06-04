@@ -47,6 +47,15 @@ ORG_ID=org-10
 docker run -it --rm -p 127.0.0.1:8080:8080 --env-file local.env --name whycontainer whycontainer
 ```
 
+* Or run the service directly without docker
+
+```
+gw run
+gw run --debug-jvm
+```
+
+If you run it directly then you'll need to make sure the env variables are in your shell environment since docker isn't there to load them for you anymore.
+
 ## Controlling the live REST service
 
 The container runs supervisord as its main command so it won't ever exit on its

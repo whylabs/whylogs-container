@@ -1,9 +1,9 @@
 package ai.whylabs.services.whylogs.core
 
-import ai.whylabs.songbird.api.LogApi
-import ai.whylabs.songbird.invoker.ApiClient
-import ai.whylabs.songbird.invoker.Configuration
-import ai.whylabs.songbird.invoker.auth.ApiKeyAuth
+import ai.whylabs.service.api.LogApi
+import ai.whylabs.service.invoker.ApiClient
+import ai.whylabs.service.invoker.Configuration
+import ai.whylabs.service.invoker.auth.ApiKeyAuth
 import org.slf4j.LoggerFactory
 
 private const val ApiKeyIdLength = 10

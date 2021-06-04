@@ -2,8 +2,6 @@ package ai.whylabs.services.whylogs.core
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.node.JsonNodeType
-import com.whylogs.core.DatasetProfile
 import io.javalin.http.Context
 import io.javalin.http.UnauthorizedResponse
 import io.javalin.plugin.openapi.annotations.ContentType
@@ -18,17 +16,15 @@ import org.slf4j.LoggerFactory
 
 
 internal const val AttributeKey = "jsonObject"
-internal val DummyObject = Object()
 private const val apiKeyHeader = "X-API-Key"
 
-const val SegmentTagPrefix = "whylabs.segment."
+const val SegmentTagPrefix = "whylogs.tag."
 const val DatasetIdTag = "datasetId"
 const val OrgIdTag = "orgId"
 
 class WhyLogsController(
     period: String = EnvVars.period,
-    private val profileManager: WhyLogsProfileManager = WhyLogsProfileManager(period = period),
-    private val debug: Boolean = EnvVars.debug,
+    private val profileManager: WhyLogsProfileManager = WhyLogsProfileManager(period = period)
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val mapper = ObjectMapper()
@@ -50,6 +46,10 @@ class WhyLogsController(
         } catch (e: Exception) {
             logger.warn("Exception: {}", e.message)
         }
+    }
+
+    fun after(ctx: Context) {
+        profileManager.mergePending()
     }
 
     @OpenApi(
@@ -131,73 +131,24 @@ Here is an example from the output above
         responses = [OpenApiResponse("200"), OpenApiResponse("400", description = "Bad or invalid input body")]
     )
     fun track(ctx: Context) {
-        val body = ctx.attribute<JsonNode>(AttributeKey)
+        // TODO improve error messaging when this fails to serialize
+        val request = ctx.bodyValidator<LogRequest>().get()
 
-        if (body == null) {
-            return400(ctx, "Missing or invalid body request")
+        if (request.single == null && request.multiple == null) {
+            return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
             return
         }
 
-        logDebug("Request body: {}", body)
-
-        val inputDatasetName = body.get("datasetId")?.textValue()
-        val datasetId = if (inputDatasetName.isNullOrBlank()) "default" else inputDatasetName
-        val jsonTags = body.get("tags")
-        val tags = mutableMapOf<String, String>()
-        if (jsonTags?.isObject == true) {
-            for (tag in jsonTags.fields()) {
-                tag.value.textValue()?.let { tags.putIfAbsent("$SegmentTagPrefix${tag.key}", it) }
-            }
-        } else if (jsonTags?.isNull == false) {
-            logger.warn("Tags field is not a mapping. Ignoring tagging")
+        // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
+        // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
+        val prefixedTags = request.tags?.mapKeys { (key) ->
+            "$SegmentTagPrefix$key"
         }
+
+        val processedRequest = request.copy(tags = prefixedTags)
 
         runBlocking {
-            profileManager.getProfile(tags, EnvVars.orgId, datasetId) { profileEntry ->
-                logDebug("Updating the profile for $inputDatasetName")
-                val profile = profileEntry.profile
-                val singleEntry = body.get("single")
-                val multipleEntries = body.get("multiple")
-
-                if (singleEntry?.isObject != true && multipleEntries?.isObject != true) {
-                    return400(ctx, "Missing input data")
-                }
-
-                if (singleEntry?.isObject == true) {
-                    trackSingle(singleEntry, ctx, profile)
-                } else if (multipleEntries?.isObject == true) {
-                    trackMultiple(multipleEntries, ctx, profile)
-                }
-            }
-        }
-    }
-
-    internal fun trackMultiple(
-        multipleEntries: JsonNode,
-        ctx: Context,
-        profile: DatasetProfile,
-    ) {
-        val featuresJson = multipleEntries.get("columns")
-        val dataJson = multipleEntries.get("data")
-
-        if (!(featuresJson.isArray && featuresJson.all { it.isTextual }) || !(dataJson.isArray && dataJson.all { it.isArray })) {
-            return400(ctx, "Malformed input data")
-            return
-        }
-        val features = featuresJson.map { value -> value.textValue() }.toList()
-        logDebug("Track multiple entries. Features: {}", features)
-        for (entry in dataJson) {
-            for (i in features.indices) {
-                trackInProfile(profile, features[i], entry.get(i))
-            }
-        }
-    }
-
-    private fun logDebug(format: String, vararg args: Any) {
-        if (debug) {
-            logger.info(format, *args)
-        } else {
-            logger.debug(format, *args)
+            profileManager.enqueue(processedRequest)
         }
     }
 
@@ -205,42 +156,16 @@ Here is an example from the output above
         ctx.res.status = 400
         ctx.result(message)
     }
-
-    internal fun trackSingle(
-        inputMap: JsonNode,
-        ctx: Context,
-        profile: DatasetProfile,
-    ) {
-        if (!inputMap.isObject) {
-            return400(ctx, "InputMap is not an object")
-            return
-        }
-
-        logger.debug("Track single entries. Fields: {}", inputMap.fieldNames().asSequence().toList())
-        for (field in inputMap.fields()) {
-            trackInProfile(profile, field.key, field.value)
-        }
-    }
-
-    private fun trackInProfile(
-        profile: DatasetProfile,
-        featureName: String,
-        value: JsonNode?,
-    ) {
-        when (value?.nodeType) {
-            JsonNodeType.ARRAY, JsonNodeType.BINARY, JsonNodeType.POJO, JsonNodeType.OBJECT -> {
-                logger.warn("Received complex object for feature: ${featureName}. Type: ${value.nodeType}")
-                profile.track(
-                    featureName,
-                    DummyObject
-                )
-            }
-            JsonNodeType.BOOLEAN -> profile.track(featureName, value.booleanValue())
-            JsonNodeType.NUMBER -> profile.track(featureName, value.numberValue())
-            JsonNodeType.STRING -> profile.track(featureName, value.textValue())
-            JsonNodeType.NULL -> profile.track(featureName, null)
-            JsonNodeType.MISSING -> {
-            }
-        }
-    }
 }
+
+data class LogRequest(
+    val datasetId: String,
+    val tags: Map<String, String>?,
+    val single: Map<String, Any>?,
+    val multiple: MultiLog?,
+)
+
+data class MultiLog(
+    val columns: List<String>,
+    val data: List<List<Any>>
+)
