@@ -22,6 +22,7 @@ class SqliteMapWriteLayer<K, V>(
         db {
             logger.debug("Created sqlite db")
             prepareStatement(createTable).execute()
+            prepareStatement("PRAGMA journal_mode=WAL;").execute()
         }
     }
 
@@ -32,8 +33,8 @@ class SqliteMapWriteLayer<K, V>(
         }
     }
 
-    private val insertStatement = "INSERT OR REPLACE INTO items (key, value) VALUES (?, ?)"
     override suspend fun set(key: K, value: V) {
+        val insertStatement = "INSERT OR REPLACE INTO items (key, value) VALUES (?, ?)"
 
         db {
             prepareStatement(insertStatement).apply {

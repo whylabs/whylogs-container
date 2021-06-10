@@ -1,27 +1,30 @@
 package ai.whylabs.services.whylogs.core
 
-import java.nio.channels.FileChannel
-import java.nio.file.Files
-import ai.whylabs.songbird.invoker.ApiException
-import ai.whylabs.songbird.model.SegmentTag
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import ai.whylabs.service.invoker.ApiException
+import ai.whylabs.service.model.SegmentTag
+import com.github.michaelbull.retry.policy.RetryPolicy
+import com.github.michaelbull.retry.policy.fullJitterBackoff
+import com.github.michaelbull.retry.policy.limitAttempts
+import com.github.michaelbull.retry.policy.plus
+import com.github.michaelbull.retry.retry
 import com.whylogs.core.DatasetProfile
 import org.slf4j.LoggerFactory
+import java.net.HttpURLConnection
+import java.net.URL
+import java.nio.channels.FileChannel
+import java.nio.file.Files
 
 interface Writer {
-    fun write(profile: DatasetProfile, outputFileName: String, orgId: String, datasetId: String)
+    suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String)
 }
+
+private val retryPolicy: RetryPolicy<Throwable> = limitAttempts(3) + fullJitterBackoff(base = 10, max = 5_000)
 
 class SongbirdWriter : Writer {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val songbirdClientManager = SongbirdClientManager()
-    private val mapper = jacksonObjectMapper()
 
-    override fun write(profile: DatasetProfile, outputFileName: String, orgId: String, datasetId: String) {
-        // TODO seems wasteful to have to log to disk first. They're ready to go as-is. Might need a new songbird API.
-        val tempFile = Files.createTempFile("whylogs", "profile")
-        logger.debug("Write profile to temp path: {}", tempFile.toAbsolutePath())
-
+    override suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String) {
         val tags = profile.tags
             .filterKeys { it.startsWith(SegmentTagPrefix) }
             .map { tag ->
@@ -32,30 +35,63 @@ class SongbirdWriter : Writer {
             }
 
         try {
-            Files.newOutputStream(tempFile).use {
-                profile.toProtobuf().build().writeDelimitedTo(it)
+            // TODO Delete this block once we can use our newer api.
+            "Use the old API".let {
+                val tempFile = Files.createTempFile("whylogs", "profile")
+                Files.newOutputStream(tempFile).use {
+                    profile.toProtobuf().build().writeDelimitedTo(it)
+                }
+
+                retry(retryPolicy) {
+                    songbirdClientManager.logApi.log(
+                        orgId,
+                        datasetId,
+                        profile.dataTimestamp.toEpochMilli(),
+                        tags,
+                        null,
+                        tempFile.toFile()
+                    )
+                }
             }
 
-            val size = FileChannel.open(tempFile).use { it.size() }
-            val tagString = tags.joinToString(",") { "[${it.key}=${it.value}]" }
-            logger.info("Pushing ${profile.tags[DatasetIdTag]}/$tagString/${profile.dataTimestamp} to WhyLabs $orgId. Size: $size bytes")
-            try {
-                songbirdClientManager.logApi.log(
-                    orgId,
-                    datasetId,
-                    profile.dataTimestamp.toEpochMilli(),
-                    emptyList(),
-                    if (tags.isEmpty()) null else mapper.writeValueAsString(tags),
-                    tempFile.toFile()
-                )
-            } catch (e: ApiException) {
-                logger.error("Fail to send data to WhyLabs. Code: ${e.code}. Message: ${e.responseBody}")
-                throw e
-            }
+            // TODO uncomment to switch over to the newer api once we finish it.
+//            val uploadResponse = retry(retryPolicy) {
+//                songbirdClientManager.logApi.logAsync(
+//                    orgId,
+//                    datasetId,
+//                    profile.dataTimestamp.toEpochMilli(),
+//                    tags,
+//                    null
+//                )
+//            }
+//
+//            retry(retryPolicy) {
+//                uploadToUrl(uploadResponse.uploadUrl!!, profile)
+//            }
+//
+            val tagString = if (tags.isEmpty()) "NO_TAGS" else tags.joinToString(",") { "[${it.key}=${it.value}]" }
             logger.info("Pushed ${profile.tags[DatasetIdTag]}/${tagString}/${profile.dataTimestamp} data successfully")
-        } finally {
-            logger.debug("Clean up temp file: {}", tempFile)
-            Files.deleteIfExists(tempFile)
+        } catch (e: ApiException) {
+            logger.error("Bad request when sending data to WhyLabs. Code: ${e.code}. Message: ${e.responseBody}", e)
+            throw e
+        } catch (t: Throwable) {
+            logger.error("Fail to send data to WhyLabs", t)
+            throw t
         }
+    }
+}
+
+private fun uploadToUrl(url: String, profile: DatasetProfile) {
+    val connection = URL(url).openConnection() as HttpURLConnection
+    connection.doOutput = true
+    connection.setRequestProperty("Content-Type", "application/octet-stream")
+    connection.requestMethod = "PUT"
+
+    connection.outputStream.use { out ->
+        profile.toProtobuf().build().writeTo(out)
+    }
+
+    if (connection.responseCode != 200) {
+        throw RuntimeException("Error uploading profile: ${connection.responseCode} ${connection.responseMessage}")
     }
 }

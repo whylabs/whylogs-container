@@ -28,6 +28,7 @@ fun main(): Unit = try {
                 post(whylogs::track)
             }
         }
+        after("logs", whylogs::after)
     }.start(EnvVars.port)
 
     // TODO make a call to list models to test the api key on startup as a health check

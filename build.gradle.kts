@@ -57,17 +57,21 @@ dependencies {
     implementation("io.javalin:javalin-openapi:3.11.2")
     implementation("io.swagger.core.v3:swagger-core:2.1.5")
     implementation("org.webjars:swagger-ui:3.24.3")
+
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.12.3")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.10.1")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.10.1")
+
     implementation("org.apache.commons:commons-lang3:3.11")
     implementation("com.amazonaws:aws-java-sdk-s3:1.11.+")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:2.13.3")
     implementation("org.xerial:sqlite-jdbc:3.34.0")
+    implementation("com.michael-bull.kotlin-retry:kotlin-retry:1.0.8")
 
     // WhyLabs
     implementation("ai.whylabs:whylogs-java-core:0.1.2-b7")
-    implementation("ai.whylabs:songbird-client:0.1-SNAPSHOT")
+    implementation("ai.whylabs:whylabs-api-client:0.1.4")
 
     // testing
     testImplementation("io.mockk:mockk:1.10.6")
