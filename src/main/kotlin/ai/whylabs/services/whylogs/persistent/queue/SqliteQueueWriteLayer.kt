@@ -20,7 +20,7 @@ class SqliteQueueWriteLayer<T>(private val name: String, private val serializer:
     }
 
     private fun db(block: Connection.() -> Unit) {
-        val url = "jdbc:sqlite:/tmp/$name.sqlite"
+        val url = "jdbc:sqlite:/tmp/$name-queue-v2.sqlite"
         DriverManager.getConnection(url).use {
             block(it)
         }

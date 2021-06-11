@@ -1,5 +1,6 @@
 package ai.whylabs.services.whylogs.core
 
+import ai.whylabs.services.whylogs.objectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.whylogs.core.DatasetProfile
 import org.junit.jupiter.api.Assertions
@@ -26,7 +27,7 @@ class ProfileEntryTests {
 
         val deserializedEntry = serializer.deserialize(serialized)
 
-        val mapper = jacksonObjectMapper()
+        val mapper = objectMapper
         // TODO there is no equals on the DatasetProfile class apparently so serialize them to strings
         // and compare the values, unfortunately
         Assertions.assertEquals(

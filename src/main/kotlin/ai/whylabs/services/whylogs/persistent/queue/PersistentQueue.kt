@@ -47,12 +47,12 @@ class PersistentQueue<T>(writer: WriteLayer<T>) : AutoCloseable {
                 logger.error("Error in processing block", t)
                 processingDone.completeExceptionally(t)
             }
-            logger.debug("Waiting for the final done signal")
-            done.await()
             logger.debug("Done popping.")
         } catch (e: CancellationException) {
             // If there is nothing to process then we get a cancel.
             logger.debug("Nothing to process.")
+        } finally {
+            logger.debug("Waiting for the final done signal")
             done.await()
         }
     }

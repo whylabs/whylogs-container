@@ -14,12 +14,38 @@ internal class ProfileEntrySerializer : Serializer<ProfileEntry> by serializer()
 
 internal class LogRequestSerializer : Serializer<LogRequestContainer> by serializer()
 
-internal class TagSerializer : Serializer<TagsKey> by serializer()
+internal class ProfileKeySerializer : Serializer<ProfileKey> by serializer()
 
 data class LogRequestContainer(
     val request: LogRequest,
     val sessionTime: Instant,
     val windowStartTime: Instant
-
 )
 
+data class ProfileKey(
+    val orgId: String,
+    val datasetId: String,
+    val normalizedTags: List<Pair<String, String>>,
+    val sessionTime: Instant,
+    val windowStartTime: Instant
+
+) {
+
+    companion object {
+        /**
+         * Create a profile key from its components.
+         * This mostly converts the tags into a consistent format so that they map to the same profile regardless of
+         * the order they come in, so long as they're equal.
+         */
+        fun fromTags(
+            orgId: String,
+            datasetId: String,
+            tags: Map<String, String>,
+            sessionTime: Instant,
+            windowStartTime: Instant
+        ): ProfileKey {
+            val data = tags.keys.sorted().map { tagKey -> Pair(tagKey, tags[tagKey].orEmpty()) }.toList()
+            return ProfileKey(orgId, datasetId, data, sessionTime, windowStartTime)
+        }
+    }
+}

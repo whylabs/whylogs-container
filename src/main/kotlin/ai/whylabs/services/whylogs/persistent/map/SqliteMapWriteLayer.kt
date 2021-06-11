@@ -27,7 +27,7 @@ class SqliteMapWriteLayer<K, V>(
     }
 
     private fun db(block: Connection.() -> Unit) {
-        val url = "jdbc:sqlite:/tmp/$name-map.sqlite"
+        val url = "jdbc:sqlite:/tmp/$name-map-v2.sqlite"
         DriverManager.getConnection(url).use {
             block(it)
         }
