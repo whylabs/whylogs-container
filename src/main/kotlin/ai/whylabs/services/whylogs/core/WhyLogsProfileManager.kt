@@ -1,17 +1,13 @@
 package ai.whylabs.services.whylogs.core
 
 import ai.whylabs.service.invoker.ApiException
+import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMap
+import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMapConfig
 import ai.whylabs.services.whylogs.persistent.map.PersistentMap
 import ai.whylabs.services.whylogs.persistent.map.SqliteMapWriteLayer
 import ai.whylabs.services.whylogs.persistent.queue.PersistentQueue
-import ai.whylabs.services.whylogs.persistent.queue.PopSize
 import ai.whylabs.services.whylogs.persistent.queue.SqliteQueueWriteLayer
 import com.whylogs.core.DatasetProfile
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.actor
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.time.Duration
@@ -22,43 +18,72 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
-data class TagsKey(val orgId: String, val datasetId: String, val data: List<Pair<String, String>>)
-
-private fun tagsToKey(orgId: String, datasetId: String, tags: Map<String, String>): TagsKey {
-    val data = tags.keys.sorted().map { tagKey -> Pair(tagKey, tags[tagKey].orEmpty()) }.toList()
-    return TagsKey(orgId, datasetId, data)
-}
-
-private val AllowedChronoUnits = setOf(ChronoUnit.HOURS, ChronoUnit.MINUTES, ChronoUnit.DAYS)
 
 class WhyLogsProfileManager(
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
     period: String?,
     currentTime: Instant = Instant.now(),
+    private val writer: Writer = SongbirdWriter(),
+    private val orgId: String = EnvVars.orgId,
+    private val sessionId: String = UUID.randomUUID().toString(),
+    writeOnStop: Boolean = true
 ) {
-
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    private val sessionId = UUID.randomUUID().toString()
     private val sessionTimeState = currentTime
     private val chronoUnit: ChronoUnit = ChronoUnit.valueOf(period ?: ChronoUnit.HOURS.name)
-    private val writer: Writer = SongbirdWriter()
 
-    // TODO keying off of the tags isn't technically correct since it allows you to respecify
-    // the org/model in the values, which makes no sense. org/model should be included as a property
-    // of the key at some point.
-    private val profiles =
-        PersistentMap(SqliteMapWriteLayer("profile-entries", TagSerializer(), ProfileEntrySerializer()))
+    private val queue = PersistentQueue(SqliteQueueWriteLayer("pending-requests", LogRequestSerializer()))
+    private val map = PersistentMap(
+        SqliteMapWriteLayer(
+            "dataset-profiles",
+            ProfileKeySerializer(),
+            ProfileEntrySerializer()
+        )
+    )
 
-    private val pendingProfiles =
-        PersistentQueue(SqliteQueueWriteLayer("pending-profiles", LogRequestSerializer()))
+    internal val config = QueueBufferedPersistentMapConfig(
+        queue = queue,
+        map = map,
+        defaultValue = { profileKey ->
+            ProfileEntry(
+                profile = DatasetProfile(
+                    sessionId,
+                    profileKey.sessionTime,
+                    profileKey.windowStartTime,
+                    profileKey.normalizedTags.toMap() + mapOf(
+                        DatasetIdTag to profileKey.datasetId,
+                        OrgIdTag to profileKey.orgId
+                    ),
+                    mapOf()
+                ),
+                orgId = profileKey.orgId,
+                datasetId = profileKey.datasetId
+            )
+        },
+        groupByBlock = { logRequestContainer ->
+            ProfileKey.fromTags(
+                orgId,
+                logRequestContainer.request.datasetId,
+                logRequestContainer.request.tags ?: emptyMap(),
+                logRequestContainer.sessionTime,
+                logRequestContainer.windowStartTime
+            )
+        },
+        mergeBlock = { acc, bufferedValue ->
+            acc.profile.merge(bufferedValue.request)
+            acc
+        }
+    )
+
+    internal val profiles = QueueBufferedPersistentMap(config)
 
     @Volatile
     private var windowStartTimeState: Instant
 
     init {
-        if (!AllowedChronoUnits.contains(chronoUnit)) {
-            throw IllegalArgumentException("Unsupported time units. Please use among: ${AllowedChronoUnits.joinToString { "; " }}")
+        val allowedChronoUnits = setOf(ChronoUnit.HOURS, ChronoUnit.MINUTES, ChronoUnit.DAYS)
+        if (!allowedChronoUnits.contains(chronoUnit)) {
+            throw IllegalArgumentException("Unsupported time units. Please use among: ${allowedChronoUnits.joinToString { "; " }}")
         }
 
         logger.info("Using time unit: {}", chronoUnit)
@@ -75,72 +100,21 @@ class WhyLogsProfileManager(
             TimeUnit.SECONDS
         )
 
-        Runtime.getRuntime().addShutdownHook(Thread(this::stop))
+        if (writeOnStop) {
+            Runtime.getRuntime().addShutdownHook(Thread(this::stop))
+        }
     }
 
-    suspend fun enqueue(request: LogRequest) {
-        val requestContainer = LogRequestContainer(
+    suspend fun enqueue(request: LogRequest) = profiles.buffer(
+        LogRequestContainer(
             request = request,
             sessionTime = sessionTimeState,
             windowStartTime = windowStartTimeState
         )
-        pendingProfiles.push(listOf(requestContainer))
-    }
+    )
 
-    // Use a channel to trigger the actual merging because we can leverage the CONFLATED option to avoid processing
-    // too many empty requests.
-    private val mergeChannel =
-        CoroutineScope(
-            Executors.newFixedThreadPool(2).asCoroutineDispatcher()
-        ).actor<Unit>(capacity = Channel.CONFLATED) {
-            for (msg in channel) {
-                // Only process once a second. We always process everything that's enqueued so doing it too often
-                // results in needless IO since this entire process is asynchronous with the requests anyway.
-                delay(1_000)
-                handleMergeMessage()
-            }
-        }
-
-    private suspend fun handleMergeMessage() {
-        pendingProfiles.pop(PopSize.All) { pendingEntries ->
-            logger.info("Merging ${pendingEntries.size} pending requests into profiles for upload.")
-
-            profiles.reset {
-                val storedProfiles = it.toMutableMap()
-                logger.debug("Currently ${storedProfiles.size} profiles waiting for upload.")
-
-                pendingEntries.forEach { pendingRequest ->
-                    val orgId = EnvVars.orgId
-                    val datasetId = pendingRequest.request.datasetId
-                    val tags = pendingRequest.request.tags ?: emptyMap()
-                    val mapKey =
-                        tagsToKey(EnvVars.orgId, pendingRequest.request.datasetId, tags)
-                    val existingProfile = storedProfiles.getOrDefault(
-                        mapKey, ProfileEntry(
-                            profile = DatasetProfile(
-                                sessionId,
-                                pendingRequest.sessionTime,
-                                pendingRequest.windowStartTime,
-                                tags + mapOf(DatasetIdTag to datasetId, OrgIdTag to orgId),
-                                mapOf()
-                            ),
-                            orgId = orgId,
-                            datasetId = datasetId
-                        )
-                    )
-
-                    storedProfiles[mapKey] = existingProfile
-                }
-                logger.debug("Ended with ${storedProfiles.size} profiles waiting for upload.")
-                storedProfiles
-            }
-        }
-    }
-
-    fun mergePending() {
-        runBlocking {
-            mergeChannel.send(Unit)
-        }
+    fun mergePending() = runBlocking {
+        profiles.mergeBuffered(null)
     }
 
     private fun stop() = runBlocking {
@@ -160,7 +134,7 @@ class WhyLogsProfileManager(
 
     private suspend fun writeOutProfiles() {
         logger.info("Writing out profiles for window: {}", windowStartTimeState)
-        profiles.reset { stagedProfiles ->
+        profiles.map.reset { stagedProfiles ->
             stagedProfiles.filter { profileEntry ->
                 logger.info("Writing out profiles for tags: {}", profileEntry.key)
                 val profile = profileEntry.value.profile
