@@ -80,4 +80,6 @@ class SqliteQueueWriteLayer<T>(private val name: String, private val serializer:
         return size ?: throw IllegalStateException("Couldn't get the size")
     }
 
+    override fun concurrentReadWrites() = true
+
 }

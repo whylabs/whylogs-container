@@ -26,37 +26,68 @@ internal sealed class PersistentQueueMessage<T>(val done: CompletableDeferred<Un
     ) : PersistentQueueMessage<T>(done)
 }
 
+
+private typealias MessageHandler <T> = suspend (message: PersistentQueueMessage<T>) -> Unit
+
+private fun <T> messageHandler(options: QueueOptions<T>): MessageHandler<T> {
+    return if (options.writeLayer.concurrentReadWrites()) {
+        concurrentMessageHandler(options)
+    } else {
+        serialMessageHandler(options)
+    }
+}
+
+private fun <T> concurrentMessageHandler(options: QueueOptions<T>): MessageHandler<T> {
+    val pushActor = subActor<PersistentQueueMessage.PushMessage<T>> { msg ->
+        try {
+            push(options, msg)
+        } catch (t: Throwable) {
+            logger.error("Error pushing items", t)
+            msg.done.completeExceptionally(t)
+        }
+    }
+
+    val popActor = subActor<PersistentQueueMessage.PopMessage<T>> { msg ->
+        try {
+            pop(options, msg)
+        } catch (t: Throwable) {
+            logger.error("Error popping items", t)
+            msg.done.completeExceptionally(t)
+        }
+    }
+
+    return { msg ->
+        when (msg) {
+            is PersistentQueueMessage.PushMessage<T> -> pushActor.send(msg)
+            is PersistentQueueMessage.PopMessage<T> -> popActor.send(msg)
+        }
+    }
+}
+
+private fun <T> serialMessageHandler(options: QueueOptions<T>): MessageHandler<T> {
+    return { msg ->
+        when (msg) {
+            is PersistentQueueMessage.PushMessage<T> -> push(options, msg)
+            is PersistentQueueMessage.PopMessage<T> -> pop(options, msg)
+        }
+    }
+}
+
+
 @ObsoleteCoroutinesApi
 internal fun <T> queueMessageHandler(options: QueueOptions<T>) =
     options.scope.actor<PersistentQueueMessage<T>>(capacity = Channel.UNLIMITED) {
-        val pushActor = subActor<PersistentQueueMessage.PushMessage<T>> { msg ->
+        val handler = messageHandler(options)
+        for (msg in channel) {
+            logger.debug("Handling message ${msg.javaClass}")
             try {
-                push(options, msg)
-            } catch (t: Throwable) {
-                logger.error("Error pushing items", t)
-                msg.done.completeExceptionally(t)
-            }
-        }
-
-        val popActor = subActor<PersistentQueueMessage.PopMessage<T>> { msg ->
-            try {
-                pop(options, msg)
+                handler(msg)
             } catch (t: Throwable) {
                 logger.error("Error popping items", t)
                 msg.done.completeExceptionally(t)
             }
-        }
 
-        for (msg in channel) {
-            logger.debug("Handling message ${msg.javaClass}")
-            when (msg) {
-                is PersistentQueueMessage.PushMessage<T> -> pushActor.send(msg)
-                is PersistentQueueMessage.PopMessage<T> -> popActor.send(msg)
-            }
         }
-
-        pushActor.close()
-        popActor.close()
     }
 
 private fun <M : PersistentQueueMessage<*>> subActor(
