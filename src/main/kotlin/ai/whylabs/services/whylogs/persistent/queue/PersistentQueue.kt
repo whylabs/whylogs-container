@@ -3,20 +3,15 @@ package ai.whylabs.services.whylogs.persistent.queue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
 import java.util.concurrent.CancellationException
 import java.util.concurrent.Executors
 
 class PersistentQueue<T>(writer: WriteLayer<T>) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(javaClass)
-
-    private val act =
-        queueMessageHandler(
-            QueueOptions(
-                CoroutineScope(Executors.newFixedThreadPool(3).asCoroutineDispatcher()),
-                writer
-            )
-        )
+    private val scope = CoroutineScope(Executors.newFixedThreadPool(3).asCoroutineDispatcher())
+    private val act = queueMessageHandler(QueueOptions(scope, writer))
 
 
     suspend fun push(items: List<T>) {
@@ -54,6 +49,18 @@ class PersistentQueue<T>(writer: WriteLayer<T>) : AutoCloseable {
         } finally {
             logger.debug("Waiting for the final done signal")
             done.await()
+        }
+    }
+
+    suspend fun popUntilEmpty(incrementSize: PopSize, block: suspend (List<T>) -> Unit) {
+        var empty = false
+        while (!empty) {
+            // TODO make this configurable
+            delay(1000)
+            pop(incrementSize) {
+                empty = it.isEmpty()
+                block(it)
+            }
         }
     }
 

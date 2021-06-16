@@ -126,7 +126,7 @@ class WhyLogsProfileManager(
     )
 
     fun mergePending() = runBlocking {
-        profiles.mergeBuffered(null)
+        profiles.mergeBuffered(EnvVars.requestQueueProcessingIncrement)
     }
 
     private fun stop() = runBlocking {

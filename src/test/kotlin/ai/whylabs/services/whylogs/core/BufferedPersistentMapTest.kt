@@ -66,7 +66,7 @@ class SimpleBufferedPersistentMapTests {
 
         // Merge bufferedMap into the map
         val doneMerging = CompletableDeferred<Unit>()
-        bufferedMap.mergeBuffered(doneMerging)
+        bufferedMap.mergeBuffered(PopSize.All, doneMerging)
         doneMerging.await()
 
         // Make sure buffered items are in the map
@@ -107,7 +107,7 @@ class SimpleBufferedPersistentMapTests {
 
         // Merge bufferedMap into the map
         val doneMerging = CompletableDeferred<Unit>()
-        bufferedMap.mergeBuffered(doneMerging)
+        bufferedMap.mergeBuffered(PopSize.All, doneMerging)
         doneMerging.await()
 
         // Make sure buffered items are in the map
