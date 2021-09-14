@@ -45,7 +45,7 @@ class WhyLogsProfileManagerTest {
 
         // Merge bufferedMap from the queue into the map
         CompletableDeferred<Unit>().apply {
-            bufferedMap.mergeBuffered(this)
+            bufferedMap.mergeBuffered(PopSize.All, this)
             await()
         }
 
@@ -118,7 +118,7 @@ class WhyLogsProfileManagerTest {
 
         // Merge from the queue into the map
         CompletableDeferred<Unit>().apply {
-            bufferedMap.mergeBuffered(this)
+            bufferedMap.mergeBuffered(PopSize.All, this)
             await()
         }
 

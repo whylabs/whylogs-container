@@ -8,7 +8,7 @@ class InMemoryWriteLayer<T> : WriteLayer<T> {
     }
 
     override suspend fun peek(n: Int): List<T> {
-        return queue.take(n)
+        return queue.take(n).toList()
     }
 
     override suspend fun pop(n: Int) {
@@ -18,4 +18,6 @@ class InMemoryWriteLayer<T> : WriteLayer<T> {
     override suspend fun size(): Int {
         return queue.size
     }
+
+    override fun concurrentReadWrites() = false
 }

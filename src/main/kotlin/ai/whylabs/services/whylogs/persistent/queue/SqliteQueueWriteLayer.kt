@@ -11,11 +11,12 @@ class SqliteQueueWriteLayer<T>(private val name: String, private val serializer:
 
     init {
         val createTable = "CREATE TABLE IF NOT EXISTS items ( value BLOB );"
-
+        db { prepareStatement("vacuum;").execute() }
+        db { prepareStatement("PRAGMA journal_mode=WAL;").execute() }
         db {
             logger.debug("Created sqlite db")
+
             prepareStatement(createTable).execute()
-            prepareStatement("PRAGMA journal_mode=WAL;").execute()
         }
     }
 
@@ -64,6 +65,10 @@ class SqliteQueueWriteLayer<T>(private val name: String, private val serializer:
         db {
             prepareStatement(query).executeUpdate()
         }
+        // Vacuuming after deleting items. Without this, the size of the sqlite database file would never shrink.
+        // This is an OK spot to do this but it might end up impacting performance a bit. It would probably be better
+        // to just do it on some interval.
+        db { prepareStatement("vacuum;").execute() }
     }
 
     override suspend fun size(): Int {
@@ -79,5 +84,7 @@ class SqliteQueueWriteLayer<T>(private val name: String, private val serializer:
 
         return size ?: throw IllegalStateException("Couldn't get the size")
     }
+
+    override fun concurrentReadWrites() = true
 
 }

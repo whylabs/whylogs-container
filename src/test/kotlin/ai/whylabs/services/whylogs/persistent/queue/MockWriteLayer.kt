@@ -22,5 +22,5 @@ class MockWriteLayer<T> : WriteLayer<T> {
 
     override suspend fun size() = storage.size
 
-
+    override fun concurrentReadWrites() = false
 }

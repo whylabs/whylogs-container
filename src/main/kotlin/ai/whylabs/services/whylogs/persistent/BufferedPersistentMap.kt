@@ -15,7 +15,7 @@ import java.util.concurrent.Executors
 interface BufferedPersistentMap<Q, K, V> : AutoCloseable {
     val map: PersistentMap<K, V>
     suspend fun buffer(item: Q)
-    suspend fun mergeBuffered(done: CompletableDeferred<Unit>?)
+    suspend fun mergeBuffered(increment: PopSize, done: CompletableDeferred<Unit>? = null)
 }
 
 data class QueueBufferedPersistentMapConfig<Q, K, V>(
@@ -28,6 +28,8 @@ data class QueueBufferedPersistentMapConfig<Q, K, V>(
     val scope: CoroutineScope = CoroutineScope(Executors.newFixedThreadPool(2).asCoroutineDispatcher())
 )
 
+private class MergeChannelMessage(val increment: PopSize, val done: CompletableDeferred<Unit>? = null)
+
 /**
  * An implementation of [BufferedPersistentMap] that uses a queue to buffer items of a certain type, Q,
  * before periodically merging them into the main map, transforming them into a V. The types and how
@@ -38,18 +40,19 @@ class QueueBufferedPersistentMap<Q, K, V>(
 ) : BufferedPersistentMap<Q, K, V> {
     override val map = config.map
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val mergeChannel = config.scope.actor<CompletableDeferred<Unit>?>(capacity = Channel.CONFLATED) {
+
+    private val mergeChannel = config.scope.actor<MergeChannelMessage>(capacity = Channel.CONFLATED) {
         for (msg in channel) {
             // Only process once a second. We always process everything that's enqueued so doing it too often
             // results in potentially needless IO since this entire process is asynchronous anyway.
             delay(1_000)
-            handleMergeMessage()
-            msg?.complete(Unit)
+            handleMergeMessage(msg.increment)
+            msg.done?.complete(Unit)
         }
     }
 
-    private suspend fun handleMergeMessage() {
-        config.queue.pop(PopSize.All) { pendingEntries ->
+    private suspend fun handleMergeMessage(popSize: PopSize = PopSize.All) {
+        val block: suspend (List<Q>) -> Unit = { pendingEntries ->
             logger.info("Merging ${pendingEntries.size} pending requests into profiles for upload.")
 
             // Group all of the entries up by the data that make them unique
@@ -63,12 +66,18 @@ class QueueBufferedPersistentMap<Q, K, V>(
                 }
             }
         }
+
+        if (popSize == PopSize.All) {
+            config.queue.pop(popSize, block)
+        } else {
+            config.queue.popUntilEmpty(popSize, block)
+        }
     }
 
     override suspend fun buffer(item: Q) = config.queue.push(listOf(item))
 
-    override suspend fun mergeBuffered(done: CompletableDeferred<Unit>?) {
-        mergeChannel.send(done)
+    override suspend fun mergeBuffered(increment: PopSize, done: CompletableDeferred<Unit>?) {
+        mergeChannel.send(MergeChannelMessage(increment, done))
     }
 
     override fun close() {

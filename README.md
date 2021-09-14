@@ -39,6 +39,10 @@ ORG_ID=org-10
 # OPTIONAL additional set of strings considered to be null values.
 # Do not include spaces or quotes around the strings.
 # NULL_STRINGS=nil,NaN,nan,null
+
+# Optional request queueing mode, selecting for perf or reliablity in incoming  requests.
+REQUEST_QUEUEING_MODE=SQLITE #default
+REQUEST_QUEUEING_MODE=IN_MEMORY
 ```
 
 * Run the Docker image with the following command:

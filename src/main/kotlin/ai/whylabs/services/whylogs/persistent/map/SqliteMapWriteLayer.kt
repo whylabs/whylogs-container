@@ -18,11 +18,11 @@ class SqliteMapWriteLayer<K, V>(
 
     init {
         val createTable = "CREATE TABLE IF NOT EXISTS items ( key TEXT NOT NULL PRIMARY KEY, value BLOB );"
-
+        db { prepareStatement("vacuum;").execute() }
+        db { prepareStatement("PRAGMA journal_mode=WAL;").execute() }
         db {
             logger.debug("Created sqlite db")
             prepareStatement(createTable).execute()
-            prepareStatement("PRAGMA journal_mode=WAL;").execute()
         }
     }
 
@@ -132,6 +132,7 @@ class SqliteMapWriteLayer<K, V>(
                 throw t
             }
         }
+        db { prepareStatement("vacuum;").execute() }
     }
 
 }
