@@ -2,17 +2,8 @@
 * To build the docker image (locally):
 
 ```
-$ MAVEN_TOKEN=xxxxx gw installDist
-$ docker build . -t whycontainer
+gw installDist && docker build . -t whycontainer
 ```
-
-* Or run a single command:
-```
-MAVEN_TOKEN=xxxxx gw installDist && docker build . -t whycontainer
-```
-
-You need to create an api token in Gitlab that has API permissions in order to authenticate with our private Gitlab
-repo that contains dependencies we consume here.
 
 ## Running the Docker image
 
@@ -26,18 +17,20 @@ JAVA_OPTS=-XX:+UseZGC -XX:+UnlockExperimentalVMOptions -XX:-ZUncommit -Xmx4G
 
 # Optional alternate api endpoint
 WHYLABS_API_ENDPOINT=http://localhost:8080
+# Hard coded api key for WhyLabs that the container always uses when uploading profiles.
 WHYLABS_API_KEY=xxxxxx
 WHYLOGS_PERIOD=HOURS
 
-# Specify the api key that will be checked on each request. The header API key
-# must match this value.
+# Each request to the container will have to provide an X-API-Key header with the
+# following value. 
 CONTAINER_API_KEY=secret-key
 
 # Specify an organization ID that is accessible with your WHYLABS_API_KEY.
 ORG_ID=org-10
 
 # OPTIONAL additional set of strings considered to be null values.
-# Do not include spaces or quotes around the strings.
+# Do not include spaces or quotes around the strings. This value is picked up in the env
+# within whylogs-java at runtime.
 # NULL_STRINGS=nil,NaN,nan,null
 
 # Optional request queueing mode, selecting for perf or reliablity in incoming  requests.
