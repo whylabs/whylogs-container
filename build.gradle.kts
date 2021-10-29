@@ -46,8 +46,11 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.10.1")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.10.1")
 
-    implementation("org.apache.commons:commons-lang3:3.11")
+    // AWS
     implementation("com.amazonaws:aws-java-sdk-s3:1.11.+")
+    implementation("com.amazonaws:aws-java-sdk-s3")
+
+    implementation("org.apache.commons:commons-lang3:3.11")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:2.13.3")
     implementation("org.xerial:sqlite-jdbc:3.34.0")

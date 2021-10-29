@@ -141,7 +141,7 @@ Here is an example from the output above
 
         // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
         // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
-        val prefixedTags = request.tags?.mapKeys { (key) ->
+        val prefixedTags = if (EnvVars.writer == WriterTypes.S3) request.tags else request.tags?.mapKeys { (key) ->
             "$SegmentTagPrefix$key"
         }
 

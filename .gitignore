@@ -65,4 +65,5 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 /.run/
-local.env
+*.env
+

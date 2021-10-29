@@ -24,7 +24,7 @@ class WhyLogsProfileManager(
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
     period: String?,
     currentTime: Instant = Instant.now(),
-    private val writer: Writer = SongbirdWriter(),
+    private val writer: Writer = if (EnvVars.writer == WriterTypes.S3) S3Writer() else SongbirdWriter(),
     private val orgId: String = EnvVars.orgId,
     private val sessionId: String = UUID.randomUUID().toString(),
     writeOnStop: Boolean = true

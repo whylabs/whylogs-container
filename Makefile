@@ -12,7 +12,7 @@ run:
 debug:
 	./gradlew run --debug-java
 
-run-docker:
+run-docker: build
 	docker run -it --rm -p 127.0.0.1:5005:5005  -p 127.0.0.1:8080:8080 --env-file local.env --name $(NAME) $(NAME)
 
 poll-sqlite-size:
