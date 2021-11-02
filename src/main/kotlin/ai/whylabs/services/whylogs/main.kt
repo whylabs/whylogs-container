@@ -9,6 +9,7 @@ import io.javalin.plugin.openapi.OpenApiOptions
 import io.javalin.plugin.openapi.OpenApiPlugin
 import io.javalin.plugin.openapi.ui.SwaggerOptions
 import io.swagger.v3.oas.models.info.Info
+import java.lang.IllegalArgumentException
 import org.slf4j.LoggerFactory
 import kotlin.system.exitProcess
 
@@ -23,6 +24,9 @@ fun main(): Unit = try {
     }.apply {
         Runtime.getRuntime().addShutdownHook(Thread { stop() })
         before("logs", whylogs::preprocess)
+        exception(IllegalArgumentException::class.java) { e, ctx ->
+            ctx.json(e.message ?: "Bad Request").status(400)
+        }
         routes {
             path("logs") {
                 post(whylogs::track)
