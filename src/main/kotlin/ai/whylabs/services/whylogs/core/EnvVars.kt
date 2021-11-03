@@ -1,6 +1,10 @@
 package ai.whylabs.services.whylogs.core
 
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
+import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import org.slf4j.LoggerFactory
 
 enum class RequestQueueingMode {
     SQLITE,
@@ -14,15 +18,26 @@ enum class WriterTypes {
 private const val uploadDestinationEnvVar = "UPLOAD_DESTINATION"
 private const val s3BucketEnvVar = "S3_BUCKET"
 private const val s3PrefixEnvVar = "S3_PREFIX"
+private const val emptyProfilesDatasetIdsEnvVar = "EMPTY_PROFILE_DATASET_IDS"
 
+private val objectMapper = jacksonObjectMapper()
 
 class EnvVars {
 
     companion object {
+        private val logger = LoggerFactory.getLogger(javaClass)
         val writer = WriterTypes.valueOf(System.getenv(uploadDestinationEnvVar) ?: WriterTypes.WHYLABS.name)
 
         val whylabsApiEndpoint = System.getenv("WHYLABS_API_ENDPOINT") ?: "https://api.whylabsapp.com"
         val orgId = requireIf(writer == WriterTypes.WHYLABS, "ORG_ID")
+
+        val emptyProfilesDatasetIds: List<String> = try {
+            val envVar = System.getenv(emptyProfilesDatasetIdsEnvVar) ?: "[]"
+            objectMapper.readValue(envVar)
+        } catch (e: JsonParseException) {
+            logger.error("Couldn't parse $emptyProfilesDatasetIdsEnvVar env var. It should be a json list of dataset ids.", e)
+            throw e
+        }
 
         val requestQueueingMode =
             RequestQueueingMode.valueOf(System.getenv("REQUEST_QUEUEING_MODE") ?: RequestQueueingMode.SQLITE.name)

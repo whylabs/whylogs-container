@@ -35,6 +35,11 @@ CONTAINER_API_KEY=secret-key
 # Required for uploading to whylabs. Specify an organization ID that is accessible with your WHYLABS_API_KEY.
 ORG_ID=org-10
 
+# Optional for forcing the container to send empty dataset profiles even when no data has been sent to it.
+# Without this, you won't actually get any profiles uploaded if you don't send data which can make it difficult
+# to tell if there is a problem or just no data flowing through by chance.
+EMPTY_PROFILE_DATASET_IDS = ["dataset-id-1", "dataset-id-2"]
+
 # OPTIONAL additional set of strings considered to be null values.
 # Do not include spaces or quotes around the strings. This value is picked up in the env
 # within whylogs-java at runtime.
@@ -59,6 +64,21 @@ gw run --debug-jvm
 ```
 
 If you run it directly then you'll need to make sure the env variables are in your shell environment since docker isn't there to load them for you anymore.
+
+## Writing dataset profiles
+
+The container can be configured to send data to WhyLabs or S3. There are some configuration options that only apply to one of those cases.
+
+When writing to S3, the `EMPTY_PROFILE_DATASET_IDS` can optionally include a list of dataset ids that you want to ensure the container always uploads data for,
+regardless of whether any data has been sent to the container for a given time period. We include various metadata as s3 metadata.
+
+- `whylogs-dataset-epoch-millis` - The dataset timestamp as a milli time. This is the time that the dataset profile was created, and it's assumed to be the time
+  that the oldest data it contains was created too. This will be the start of a time period (minute/hour/day), not the actual first time data is sent.
+- `whylogs-session-id` - A unique UUID generated when the profile is created.
+- `whylogs-dataset-id` - The dataset id that was specified either in the API or as part of the `EMPTY_PROFILE_DATASET_IDS` config. It's effectively a string for
+  you to tie back to a model or dataset that this data is a part of.
+- `whylogs-session-epoch-millis` - The milli time that the container was started.
+- `whylogs-segment-tags` - The tags used in this profile.
 
 ## Controlling the live REST service
 

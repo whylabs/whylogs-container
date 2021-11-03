@@ -72,18 +72,18 @@ class WhyLogsProfileManager(
                 datasetId = profileKey.datasetId
             )
         },
-        groupByBlock = { logRequestContainer ->
+        groupByBlock = { bufferedLogRequest ->
             ProfileKey.fromTags(
                 orgId,
-                logRequestContainer.request.datasetId,
-                logRequestContainer.request.tags ?: emptyMap(),
-                logRequestContainer.sessionTime,
-                logRequestContainer.windowStartTime
+                bufferedLogRequest.request.datasetId,
+                bufferedLogRequest.request.tags ?: emptyMap(),
+                bufferedLogRequest.sessionTime,
+                bufferedLogRequest.windowStartTime
             )
         },
-        mergeBlock = { acc, bufferedValue ->
-            acc.profile.merge(bufferedValue.request)
-            acc
+        mergeBlock = { profile, logRequest ->
+            profile.profile.merge(logRequest.request)
+            profile
         }
     )
 
@@ -115,10 +115,14 @@ class WhyLogsProfileManager(
         if (writeOnStop) {
             Runtime.getRuntime().addShutdownHook(Thread(this::stop))
         }
+
+        runBlocking {
+            initializeProfiles()
+        }
     }
 
     suspend fun enqueue(request: LogRequest) = profiles.buffer(
-        LogRequestContainer(
+        BufferedLogRequest(
             request = request,
             sessionTime = sessionTimeState,
             windowStartTime = windowStartTimeState
@@ -137,15 +141,38 @@ class WhyLogsProfileManager(
         logger.info("Finished cleaning up resources")
     }
 
+    /**
+     * Create emtpy profiles for each of the dataset ids that we're configured to. This is what
+     * keeps the container sending profiles in the absence of receiving actual data, which is a useful
+     * property to have to know if things are going wrong.
+     */
+    private suspend fun initializeProfiles() {
+        EnvVars.emptyProfilesDatasetIds.forEach { datasetId ->
+            logger.info("Initializing empty profile for $datasetId")
+            enqueue(
+                LogRequest(
+                    datasetId = datasetId,
+                    tags = null,
+                    single = null,
+                    multiple = null
+                )
+            )
+        }
+
+        mergePending()
+    }
+
     private fun rotate() = runBlocking {
         logger.info("Rotating logs for the current window: {}", windowStartTimeState)
         writeOutProfiles()
         windowStartTimeState = Instant.now().truncatedTo(chronoUnit)
         logger.info("New window time: {}", windowStartTimeState)
+        initializeProfiles()
     }
 
     private suspend fun writeOutProfiles() {
         logger.info("Writing out profiles for window: {}", windowStartTimeState)
+
         profiles.map.reset { stagedProfiles ->
             stagedProfiles.filter { profileEntry ->
                 logger.info("Writing out profiles for tags: {}", profileEntry.key)

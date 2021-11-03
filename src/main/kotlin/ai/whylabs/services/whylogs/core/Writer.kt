@@ -21,7 +21,6 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import org.slf4j.LoggerFactory
 
-
 interface Writer {
     suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String)
 
@@ -86,15 +85,16 @@ class S3Writer : Writer {
         val metadata = ObjectMetadata().apply {
             addUserMetadata("whylogs-dataset-epoch-millis", profile.dataTimestamp.toEpochMilli().toString())
             addUserMetadata("whylogs-session-id", profile.sessionId)
+            addUserMetadata("whylogs-dataset-id", datasetId)
             addUserMetadata("whylogs-session-epoch-millis", profile.sessionTimestamp.toEpochMilli().toString())
-            addUserMetadata("whylogs-segmente-tags", tagString)
+            addUserMetadata("whylogs-segment-tags", tagString)
         }
 
         try {
             retry(retryPolicy) {
                 s3Client.putObject(EnvVars.s3Bucket, key, bytes, metadata)
             }
-            logger.info("Uploaded profile ${profile.sessionId} with tags $tags to s3 with key $key")
+            logger.info("Uploaded profile ${profile.sessionId} with tags $tagString to s3 with key $key")
         } catch (t: Throwable) {
             logger.error("Failed to upload profile to s3", t)
         }

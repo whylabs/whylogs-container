@@ -11,8 +11,7 @@ import java.util.concurrent.Executors
  * @param writer An implementation of [MapWriteLayer] to use for persistence.
  */
 class PersistentMap<K, V>(writer: MapWriteLayer<K, V>) : AutoCloseable {
-    private val logger = LoggerFactory.getLogger(javaClass).also {
-    }
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     private val act =
         mapMessageHandler(
