@@ -16,8 +16,7 @@ import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
-
-class SimpleBufferedPersistentMapTests {
+class BufferedPersistentMapTest {
     class StringSerializer : Serializer<String> by serializer()
     class IntSerializer : Serializer<Int> by serializer()
 
@@ -82,22 +81,23 @@ class SimpleBufferedPersistentMapTests {
         bufferedMap.close()
     }
 
-
     @Test
     fun `buffered items are correctly grouped into the right map entries`() = runBlocking {
-        val bufferedMap = QueueBufferedPersistentMap(config.copy(
-            // Make a's and b's go to the map's "1" key, everything else goes to "2"
-            groupByBlock = {
-                when (it) {
-                    "a" -> "1"
-                    "b" -> "1"
-                    else -> "2"
-                }
-            },
-            // Just keep track of counts in the main map
-            mergeBlock = { acc, _ -> acc + 1 }
+        val bufferedMap = QueueBufferedPersistentMap(
+            config.copy(
+                // Make a's and b's go to the map's "1" key, everything else goes to "2"
+                groupByBlock = {
+                    when (it) {
+                        "a" -> "1"
+                        "b" -> "1"
+                        else -> "2"
+                    }
+                },
+                // Just keep track of counts in the main map
+                mergeBlock = { acc, _ -> acc + 1 }
 
-        ))
+            )
+        )
 
         // Add some stuff
         bufferedMap.buffer("a")

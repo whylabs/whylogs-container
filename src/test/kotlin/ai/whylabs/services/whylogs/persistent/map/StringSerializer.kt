@@ -12,4 +12,3 @@ internal class StringSerializer : Serializer<String> {
         return t.toByteArray(Charset.forName("utf-8"))
     }
 }
-

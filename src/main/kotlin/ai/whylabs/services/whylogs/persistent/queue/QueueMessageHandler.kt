@@ -26,11 +26,10 @@ internal sealed class PersistentQueueMessage<T>(val done: CompletableDeferred<Un
     ) : PersistentQueueMessage<T>(done)
 }
 
-
 private typealias MessageHandler <T> = suspend (message: PersistentQueueMessage<T>) -> Unit
 
 private fun <T> messageHandler(options: QueueOptions<T>): MessageHandler<T> {
-    return if (options.writeLayer.concurrentReadWrites()) {
+    return if (options.queueWriteLayer.concurrentReadWrites()) {
         concurrentMessageHandler(options)
     } else {
         serialMessageHandler(options)
@@ -73,7 +72,6 @@ private fun <T> serialMessageHandler(options: QueueOptions<T>): MessageHandler<T
     }
 }
 
-
 @ObsoleteCoroutinesApi
 internal fun <T> queueMessageHandler(options: QueueOptions<T>) =
     options.scope.actor<PersistentQueueMessage<T>>(capacity = Channel.UNLIMITED) {
@@ -86,7 +84,6 @@ internal fun <T> queueMessageHandler(options: QueueOptions<T>) =
                 logger.error("Error popping items", t)
                 msg.done.completeExceptionally(t)
             }
-
         }
     }
 
@@ -101,11 +98,10 @@ private fun <M : PersistentQueueMessage<*>> subActor(
     }
 }
 
-
 private suspend fun <T> push(options: QueueOptions<T>, message: PersistentQueueMessage.PushMessage<T>) {
     withTimeout(3000) {
         logger.debug("Writing message")
-        options.writeLayer.push(message.value)
+        options.queueWriteLayer.push(message.value)
         message.done.complete(Unit)
         logger.debug("Done writing message")
     }
@@ -114,8 +110,8 @@ private suspend fun <T> push(options: QueueOptions<T>, message: PersistentQueueM
 private suspend fun <T> pop(options: QueueOptions<T>, message: PersistentQueueMessage.PopMessage<T>) {
     withTimeout(30_000) {
         val popSize = when (message.n) {
-            is PopSize.All -> options.writeLayer.size()
-            is PopSize.N -> min(message.n.n, options.writeLayer.size())
+            is PopSize.All -> options.queueWriteLayer.size()
+            is PopSize.N -> min(message.n.n, options.queueWriteLayer.size())
         }
 
         if (popSize == 0) {
@@ -126,7 +122,7 @@ private suspend fun <T> pop(options: QueueOptions<T>, message: PersistentQueueMe
         }
 
         logger.debug("Peeking $popSize messages")
-        val items = options.writeLayer.peek(popSize)
+        val items = options.queueWriteLayer.peek(popSize)
         message.items.complete(items)
 
         logger.debug("Waiting for items to be processed by the consumer")
@@ -140,7 +136,7 @@ private suspend fun <T> pop(options: QueueOptions<T>, message: PersistentQueueMe
 
         // means that the items were handled and they can be discarded now
         logger.debug("Discarding processed items")
-        options.writeLayer.pop(popSize)
+        options.queueWriteLayer.pop(popSize)
 
         // Done with everything
         logger.debug("Done with everything")

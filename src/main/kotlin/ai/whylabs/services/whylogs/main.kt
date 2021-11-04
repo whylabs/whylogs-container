@@ -9,13 +9,14 @@ import io.javalin.plugin.openapi.OpenApiOptions
 import io.javalin.plugin.openapi.OpenApiPlugin
 import io.javalin.plugin.openapi.ui.SwaggerOptions
 import io.swagger.v3.oas.models.info.Info
-import java.lang.IllegalArgumentException
 import org.slf4j.LoggerFactory
+import java.lang.IllegalArgumentException
 import kotlin.system.exitProcess
 
 private val logger = LoggerFactory.getLogger("ai.whylabs.services.whylogs")
 fun main(): Unit = try {
     val whylogs = WhyLogsController()
+    val envVars = EnvVars()
 
     Javalin.create {
         it.registerPlugin(getConfiguredOpenApiPlugin())
@@ -33,11 +34,11 @@ fun main(): Unit = try {
             }
         }
         after("logs", whylogs::after)
-    }.start(EnvVars.port)
+    }.start(envVars.port)
 
     // TODO make a call to list models to test the api key on startup as a health check
 
-    logger.info("Checkout Swagger UI at http://localhost:${EnvVars.port}/swagger-ui")
+    logger.info("Checkout Swagger UI at http://localhost:${envVars.port}/swagger-ui")
 } catch (t: Throwable) {
     // Need to manually shut down here because our manager hooks itself up to runtime hooks
     // and starts a background thread. It would keep the JVM alive without javalin running.

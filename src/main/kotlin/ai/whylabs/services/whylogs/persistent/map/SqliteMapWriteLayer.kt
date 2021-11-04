@@ -134,5 +134,4 @@ class SqliteMapWriteLayer<K, V>(
         }
         db { prepareStatement("vacuum;").execute() }
     }
-
 }

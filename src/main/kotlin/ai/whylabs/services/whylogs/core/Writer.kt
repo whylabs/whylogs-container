@@ -13,13 +13,13 @@ import com.github.michaelbull.retry.policy.limitAttempts
 import com.github.michaelbull.retry.policy.plus
 import com.github.michaelbull.retry.retry
 import com.whylogs.core.DatasetProfile
+import org.slf4j.LoggerFactory
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import org.slf4j.LoggerFactory
 
 interface Writer {
     suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String)
@@ -55,8 +55,7 @@ interface Writer {
 
 private val retryPolicy: RetryPolicy<Throwable> = limitAttempts(3) + fullJitterBackoff(base = 10, max = 5_000)
 
-
-class S3Writer : Writer {
+class S3Writer(private val envVars: IEnvVars = EnvVars()) : Writer {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     private val keyFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(ZoneId.from(ZoneOffset.UTC))
@@ -77,7 +76,7 @@ class S3Writer : Writer {
         val isoDate = keyFormatter.format(profile.dataTimestamp)
         val keyDate = dateFormatter.format(profile.dataTimestamp)
         // Add a unique prefix to each upload to make sure that people uploading from multiple containers won't clobber profiles.
-        val prefix = if (EnvVars.s3Prefix.isEmpty()) "" else "${EnvVars.s3Prefix}/"
+        val prefix = if (envVars.s3Prefix.isEmpty()) "" else "${envVars.s3Prefix}/"
         val key = "${prefix}$keyDate/${randomId}_$isoDate.bin"
         val proto = profile.toProtobuf().build()
         val bytes = proto.toByteArray().inputStream()
@@ -92,7 +91,7 @@ class S3Writer : Writer {
 
         try {
             retry(retryPolicy) {
-                s3Client.putObject(EnvVars.s3Bucket, key, bytes, metadata)
+                s3Client.putObject(envVars.s3Bucket, key, bytes, metadata)
             }
             logger.info("Uploaded profile ${profile.sessionId} with tags $tagString to s3 with key $key")
         } catch (t: Throwable) {
@@ -124,7 +123,7 @@ class SongbirdWriter : Writer {
             }
 
             val tagString = getTagString(tags)
-            logger.info("Pushed ${profile.tags[DatasetIdTag]}/${tagString}/${profile.dataTimestamp} data successfully")
+            logger.info("Pushed ${profile.tags[DatasetIdTag]}/$tagString/${profile.dataTimestamp} data successfully")
         } catch (e: ApiException) {
             logger.error("Bad request when sending data to WhyLabs. Code: ${e.code}. Message: ${e.responseBody}", e)
             throw e

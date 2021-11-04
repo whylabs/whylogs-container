@@ -1,6 +1,7 @@
 image: "gradle:jdk15"
 stages:
   - build
+  - test
   - publish
 
 variables:
@@ -14,6 +15,19 @@ build:
     paths:
       - build/install/whylogs-container
     expire_in: 1 week
+  only:
+    - mainline
+    - merge_requests
+
+test:
+  stage: test
+  script:
+    - ./gradlew test
+  artifacts:
+    paths:
+      - build/reports/tests/test/index.html
+    expire_in: 1 week
+  needs: ["build"]
   only:
     - mainline
     - merge_requests

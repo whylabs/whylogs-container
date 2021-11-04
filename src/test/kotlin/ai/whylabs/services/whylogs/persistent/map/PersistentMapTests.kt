@@ -56,8 +56,6 @@ class PersistentMapTests {
         }
         val clearedFoo = map.get(key)
         Assertions.assertEquals(clearedFoo, null)
-
-
     }
 
     @Test

@@ -4,6 +4,7 @@ plugins {
     idea
     kotlin("jvm") version "1.4.10"
     application
+    id("org.jlleitschuh.gradle.ktlint") version "10.2.0"
 }
 group = "ai.whylabs.services"
 version = "1.0-SNAPSHOT"

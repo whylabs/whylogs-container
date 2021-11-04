@@ -91,4 +91,3 @@ class PersistentMap<K, V>(writer: MapWriteLayer<K, V>) : AutoCloseable {
         act.close()
     }
 }
-
