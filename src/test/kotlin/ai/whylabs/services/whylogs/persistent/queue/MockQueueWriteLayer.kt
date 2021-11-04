@@ -1,6 +1,6 @@
 package ai.whylabs.services.whylogs.persistent.queue
 
-class MockWriteLayer<T> : WriteLayer<T> {
+class MockQueueWriteLayer<T> : QueueWriteLayer<T> {
     var storage = mutableListOf<T>()
 
     override suspend fun push(t: List<T>) {

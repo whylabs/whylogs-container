@@ -12,11 +12,11 @@ data class ProfileEntry(val profile: DatasetProfile, val orgId: String, val data
 
 internal class ProfileEntrySerializer : Serializer<ProfileEntry> by serializer()
 
-internal class LogRequestSerializer : Serializer<LogRequestContainer> by serializer()
+internal class LogRequestSerializer : Serializer<BufferedLogRequest> by serializer()
 
 internal class ProfileKeySerializer : Serializer<ProfileKey> by serializer()
 
-data class LogRequestContainer(
+data class BufferedLogRequest(
     val request: LogRequest,
     val sessionTime: Instant,
     val windowStartTime: Instant

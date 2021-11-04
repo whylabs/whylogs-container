@@ -1,6 +1,6 @@
 package ai.whylabs.services.whylogs.persistent.queue
 
-class InMemoryWriteLayer<T> : WriteLayer<T> {
+class InMemoryQueueWriteLayer<T> : QueueWriteLayer<T> {
     private var queue = mutableListOf<T>()
 
     override suspend fun push(t: List<T>) {

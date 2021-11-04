@@ -5,7 +5,7 @@ import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMap
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMapConfig
 import ai.whylabs.services.whylogs.persistent.map.PersistentMap
 import ai.whylabs.services.whylogs.persistent.map.SqliteMapWriteLayer
-import ai.whylabs.services.whylogs.persistent.queue.InMemoryWriteLayer
+import ai.whylabs.services.whylogs.persistent.queue.InMemoryQueueWriteLayer
 import ai.whylabs.services.whylogs.persistent.queue.PersistentQueue
 import ai.whylabs.services.whylogs.persistent.queue.SqliteQueueWriteLayer
 import com.whylogs.core.DatasetProfile
@@ -19,25 +19,25 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
-
 class WhyLogsProfileManager(
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
     period: String?,
     currentTime: Instant = Instant.now(),
-    private val writer: Writer = if (EnvVars.writer == WriterTypes.S3) S3Writer() else SongbirdWriter(),
-    private val orgId: String = EnvVars.orgId,
+    private val envVars: IEnvVars = EnvVars(),
+    private val writer: Writer = if (envVars.writer == WriterTypes.S3) S3Writer() else SongbirdWriter(),
+    private val orgId: String = envVars.orgId,
     private val sessionId: String = UUID.randomUUID().toString(),
-    writeOnStop: Boolean = true
+    writeOnStop: Boolean = true,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val sessionTimeState = currentTime
     private val chronoUnit: ChronoUnit = ChronoUnit.valueOf(period ?: ChronoUnit.HOURS.name)
 
     private val queue = PersistentQueue(
-        when (EnvVars.requestQueueingMode) {
+        when (envVars.requestQueueingMode) {
             RequestQueueingMode.IN_MEMORY -> {
                 logger.info("Using InMemoryWriteLayer for request queue.")
-                InMemoryWriteLayer()
+                InMemoryQueueWriteLayer()
             }
             RequestQueueingMode.SQLITE -> {
                 logger.info("Using SqliteQueueWriteLayer for request queue.")
@@ -72,18 +72,18 @@ class WhyLogsProfileManager(
                 datasetId = profileKey.datasetId
             )
         },
-        groupByBlock = { logRequestContainer ->
+        groupByBlock = { bufferedLogRequest ->
             ProfileKey.fromTags(
                 orgId,
-                logRequestContainer.request.datasetId,
-                logRequestContainer.request.tags ?: emptyMap(),
-                logRequestContainer.sessionTime,
-                logRequestContainer.windowStartTime
+                bufferedLogRequest.request.datasetId,
+                bufferedLogRequest.request.tags ?: emptyMap(),
+                bufferedLogRequest.sessionTime,
+                bufferedLogRequest.windowStartTime
             )
         },
-        mergeBlock = { acc, bufferedValue ->
-            acc.profile.merge(bufferedValue.request)
-            acc
+        mergeBlock = { profile, logRequest ->
+            profile.profile.merge(logRequest.request)
+            profile
         }
     )
 
@@ -115,10 +115,14 @@ class WhyLogsProfileManager(
         if (writeOnStop) {
             Runtime.getRuntime().addShutdownHook(Thread(this::stop))
         }
+
+        runBlocking {
+            initializeProfiles()
+        }
     }
 
     suspend fun enqueue(request: LogRequest) = profiles.buffer(
-        LogRequestContainer(
+        BufferedLogRequest(
             request = request,
             sessionTime = sessionTimeState,
             windowStartTime = windowStartTimeState
@@ -126,7 +130,7 @@ class WhyLogsProfileManager(
     )
 
     fun mergePending() = runBlocking {
-        profiles.mergeBuffered(EnvVars.requestQueueProcessingIncrement)
+        profiles.mergeBuffered(envVars.requestQueueProcessingIncrement)
     }
 
     private fun stop() = runBlocking {
@@ -137,15 +141,38 @@ class WhyLogsProfileManager(
         logger.info("Finished cleaning up resources")
     }
 
+    /**
+     * Create emtpy profiles for each of the dataset ids that we're configured to. This is what
+     * keeps the container sending profiles in the absence of receiving actual data, which is a useful
+     * property to have to know if things are going wrong.
+     */
+    private suspend fun initializeProfiles() {
+        envVars.emptyProfilesDatasetIds.forEach { datasetId ->
+            logger.info("Initializing empty profile for $datasetId")
+            enqueue(
+                LogRequest(
+                    datasetId = datasetId,
+                    tags = null,
+                    single = null,
+                    multiple = null
+                )
+            )
+        }
+
+        mergePending()
+    }
+
     private fun rotate() = runBlocking {
         logger.info("Rotating logs for the current window: {}", windowStartTimeState)
         writeOutProfiles()
         windowStartTimeState = Instant.now().truncatedTo(chronoUnit)
         logger.info("New window time: {}", windowStartTimeState)
+        initializeProfiles()
     }
 
     private suspend fun writeOutProfiles() {
         logger.info("Writing out profiles for window: {}", windowStartTimeState)
+
         profiles.map.reset { stagedProfiles ->
             stagedProfiles.filter { profileEntry ->
                 logger.info("Writing out profiles for tags: {}", profileEntry.key)
@@ -161,7 +188,8 @@ class WhyLogsProfileManager(
                         """
                         API Exception writing to whylabs. Keeping profile ${profileEntry.key} to try later. 
                         Response: ${e.responseBody}
-                        Headers: ${e.responseHeaders}""".trimIndent(),
+                        Headers: ${e.responseHeaders}
+                        """.trimIndent(),
                         e
                     )
                     true
@@ -176,4 +204,3 @@ class WhyLogsProfileManager(
         }
     }
 }
-

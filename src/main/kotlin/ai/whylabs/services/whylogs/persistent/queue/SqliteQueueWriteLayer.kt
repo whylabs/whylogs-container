@@ -6,7 +6,7 @@ import java.lang.IllegalStateException
 import java.sql.Connection
 import java.sql.DriverManager
 
-class SqliteQueueWriteLayer<T>(private val name: String, private val serializer: Serializer<T>) : WriteLayer<T> {
+class SqliteQueueWriteLayer<T>(private val name: String, private val serializer: Serializer<T>) : QueueWriteLayer<T> {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     init {
@@ -86,5 +86,4 @@ class SqliteQueueWriteLayer<T>(private val name: String, private val serializer:
     }
 
     override fun concurrentReadWrites() = true
-
 }

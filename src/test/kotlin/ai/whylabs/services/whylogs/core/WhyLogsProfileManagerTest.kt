@@ -12,6 +12,22 @@ import java.time.Instant
 private const val sessionId = "123"
 private const val orgId = "org-1"
 
+class WhyLabsEnvVars : IEnvVars {
+    override val writer = WriterTypes.WHYLABS
+    override val whylabsApiEndpoint = "none"
+    override val orgId = "org-1"
+    override val emptyProfilesDatasetIds = emptyList<String>()
+    override val requestQueueingMode = RequestQueueingMode.SQLITE
+    override val requestQueueProcessingIncrement = PopSize.All
+    override val whylabsApiKey = "key"
+    override val period = "HOURS"
+    override val expectedApiKey = "password"
+    override val s3Prefix = ""
+    override val s3Bucket = "test-bucket"
+    override val port = 8080
+    override val debug = false
+}
+
 class WhyLogsProfileManagerTest {
 
     lateinit var manager: WhyLogsProfileManager
@@ -24,7 +40,8 @@ class WhyLogsProfileManagerTest {
             writer = FakeWriter(),
             orgId = orgId,
             sessionId = sessionId,
-            writeOnStop = false
+            writeOnStop = false,
+            envVars = WhyLabsEnvVars()
         )
 
         // Clear out any cached entries since this uses a real sqlite backend.
@@ -176,7 +193,6 @@ class WhyLogsProfileManagerTest {
 
         bufferedMap.close()
     }
-
 }
 
 class FakeWriter : Writer {
@@ -202,12 +218,12 @@ private fun DatasetProfile.assertEquals(other: DatasetProfile) {
     Assertions.assertEquals(this.sessionId, other.sessionId, "sessionId")
 }
 
-data class TestItem(val key: ProfileKey, val request: LogRequestContainer, val profile: DatasetProfile)
+data class TestItem(val key: ProfileKey, val requestBuffered: BufferedLogRequest, val profile: DatasetProfile)
 
 fun createTestData(): List<TestItem> {
     // Make a bunch of requests that should end up getting stored separately because of their tags
     val tagsA = mapOf("tag1" to "value1", "tag2" to "value2")
-    val requestA = LogRequestContainer(
+    val requestA = BufferedLogRequest(
         request = LogRequest(
             datasetId = "model-1",
             tags = tagsA,
@@ -233,7 +249,7 @@ fun createTestData(): List<TestItem> {
     )
 
     val tagsB = mapOf("tag1" to "a", "tag2" to "b")
-    val requestB = LogRequestContainer(
+    val requestB = BufferedLogRequest(
         request = LogRequest(
             datasetId = "model-1",
             tags = tagsB,
@@ -259,7 +275,7 @@ fun createTestData(): List<TestItem> {
     )
 
     val tagsC = mapOf("tag1" to "value1")
-    val requestC = LogRequestContainer(
+    val requestC = BufferedLogRequest(
         request = LogRequest(
             datasetId = "model-1",
             tags = tagsC,
@@ -284,7 +300,7 @@ fun createTestData(): List<TestItem> {
         mapOf()
     )
 
-    val requestD = LogRequestContainer(
+    val requestD = BufferedLogRequest(
         request = LogRequest(
             datasetId = "model-2", // Different model
             tags = tagsC, // Same tags
@@ -316,4 +332,3 @@ fun createTestData(): List<TestItem> {
         TestItem(keyD, requestD, profileD)
     )
 }
-

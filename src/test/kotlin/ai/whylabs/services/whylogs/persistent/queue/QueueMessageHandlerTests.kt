@@ -15,7 +15,7 @@ class QueueMessageHandlerTests {
 
     @Test
     fun `push and pop happy path`() = runBlocking {
-        PersistentQueue<String>(MockWriteLayer()).use { queue ->
+        PersistentQueue<String>(MockQueueWriteLayer()).use { queue ->
             queue.push(listOf("a", "b", "c"))
 
             queue.pop(PopSize.N(2)) { items ->
@@ -24,10 +24,9 @@ class QueueMessageHandlerTests {
         }
     }
 
-
     @Test
     fun `popping more than exist returns all`() = runBlocking {
-        PersistentQueue<String>(MockWriteLayer()).use { queue ->
+        PersistentQueue<String>(MockQueueWriteLayer()).use { queue ->
             queue.push(listOf("a", "b", "c"))
 
             queue.pop(PopSize.N(20)) { items ->
@@ -36,12 +35,11 @@ class QueueMessageHandlerTests {
         }
     }
 
-
     @Test
     fun `popping doesn't block pushing`() = runBlocking {
         // If pop does block then this test will fail with a timeout
         withTimeout(5_000) {
-            PersistentQueue<String>(MockWriteLayer()).use { queue ->
+            PersistentQueue<String>(MockQueueWriteLayer()).use { queue ->
                 queue.push(listOf("a", "b", "c"))
 
                 val popDone = CompletableDeferred<Unit>()
@@ -62,7 +60,7 @@ class QueueMessageHandlerTests {
 
     @Test
     fun `throwing in pop doesn't break the queue or drop items`() = runBlocking {
-        PersistentQueue<String>(MockWriteLayer()).use { queue ->
+        PersistentQueue<String>(MockQueueWriteLayer()).use { queue ->
             queue.push(listOf("a", "b", "c"))
 
             // There should still be all 3 items left in the queue
@@ -82,7 +80,6 @@ class QueueMessageHandlerTests {
         }
     }
 }
-
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PersistentSqliteQueueTests {
@@ -122,7 +119,6 @@ class PersistentSqliteQueueTests {
         }
     }
 
-
     @Test
     fun `throwing pop doesn't break the queue or drop items`() = runBlocking {
         queue.use {
@@ -147,7 +143,6 @@ class PersistentSqliteQueueTests {
         }
     }
 }
-
 
 class StringSerializer : Serializer<String> {
     override fun deserialize(bytes: ByteArray): String {

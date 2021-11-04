@@ -8,11 +8,10 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.CancellationException
 import java.util.concurrent.Executors
 
-class PersistentQueue<T>(writer: WriteLayer<T>) : AutoCloseable {
+class PersistentQueue<T>(writer: QueueWriteLayer<T>) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val scope = CoroutineScope(Executors.newFixedThreadPool(3).asCoroutineDispatcher())
     private val act = queueMessageHandler(QueueOptions(scope, writer))
-
 
     suspend fun push(items: List<T>) {
         logger.debug("Pushing")
@@ -76,7 +75,5 @@ sealed class PopSize {
 
 data class QueueOptions<T>(
     internal val scope: CoroutineScope,
-    internal val writeLayer: WriteLayer<T>,
+    internal val queueWriteLayer: QueueWriteLayer<T>,
 )
-
-

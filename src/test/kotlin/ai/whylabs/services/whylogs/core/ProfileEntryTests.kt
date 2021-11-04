@@ -1,7 +1,6 @@
 package ai.whylabs.services.whylogs.core
 
 import ai.whylabs.services.whylogs.objectMapper
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.whylogs.core.DatasetProfile
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test

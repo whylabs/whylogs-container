@@ -8,18 +8,18 @@ import org.slf4j.LoggerFactory
 
 private const val ApiKeyIdLength = 10
 
-class SongbirdClientManager {
+class SongbirdClientManager(envVars: IEnvVars = EnvVars()) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     private val defaultClient: ApiClient = Configuration.getDefaultApiClient()
     val logApi = LogApi(defaultClient)
 
     init {
-        defaultClient.basePath = EnvVars.whylabsApiEndpoint
+        defaultClient.basePath = envVars.whylabsApiEndpoint
 
         // Configure API key authorization: ApiKeyAuth
         val apiKeyAuth = defaultClient.getAuthentication("ApiKeyAuth") as ApiKeyAuth
-        logger.info("Using WhyLabs API key ID: ${EnvVars.whylabsApiKey.substring(0, ApiKeyIdLength)}")
-        apiKeyAuth.apiKey = EnvVars.whylabsApiKey
+        logger.info("Using WhyLabs API key ID: ${envVars.whylabsApiKey.substring(0, ApiKeyIdLength)}")
+        apiKeyAuth.apiKey = envVars.whylabsApiKey
     }
 }

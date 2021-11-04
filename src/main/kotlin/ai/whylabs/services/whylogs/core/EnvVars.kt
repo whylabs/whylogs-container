@@ -1,6 +1,10 @@
 package ai.whylabs.services.whylogs.core
 
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
+import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import org.slf4j.LoggerFactory
 
 enum class RequestQueueingMode {
     SQLITE,
@@ -14,32 +18,60 @@ enum class WriterTypes {
 private const val uploadDestinationEnvVar = "UPLOAD_DESTINATION"
 private const val s3BucketEnvVar = "S3_BUCKET"
 private const val s3PrefixEnvVar = "S3_PREFIX"
+private const val emptyProfilesDatasetIdsEnvVar = "EMPTY_PROFILE_DATASET_IDS"
 
+private val objectMapper = jacksonObjectMapper()
 
-class EnvVars {
+interface IEnvVars {
+    val writer: WriterTypes
+    val whylabsApiEndpoint: String
+    val orgId: String
 
-    companion object {
-        val writer = WriterTypes.valueOf(System.getenv(uploadDestinationEnvVar) ?: WriterTypes.WHYLABS.name)
+    val emptyProfilesDatasetIds: List<String>
+    val requestQueueingMode: RequestQueueingMode
 
-        val whylabsApiEndpoint = System.getenv("WHYLABS_API_ENDPOINT") ?: "https://api.whylabsapp.com"
-        val orgId = requireIf(writer == WriterTypes.WHYLABS, "ORG_ID")
+    val requestQueueProcessingIncrement: PopSize
+    val whylabsApiKey: String
+    val period: String
+    val expectedApiKey: String
 
-        val requestQueueingMode =
-            RequestQueueingMode.valueOf(System.getenv("REQUEST_QUEUEING_MODE") ?: RequestQueueingMode.SQLITE.name)
-        val requestQueueProcessingIncrement = parseQueueIncrement()
+    val s3Prefix: String
+    val s3Bucket: String
 
-        val whylabsApiKey = requireIf(writer == WriterTypes.WHYLABS, "WHYLABS_API_KEY")
-        val period = require("WHYLOGS_PERIOD")
-        val expectedApiKey = require("CONTAINER_API_KEY")
+    val port: Int
+    val debug: Boolean
+}
 
+class EnvVars : IEnvVars {
 
-        // Just use a single writer until we get requests otherwise to simplify the error handling logic
-        val s3Prefix = System.getenv(s3PrefixEnvVar) ?: ""
-        val s3Bucket = requireIf(writer == WriterTypes.S3, s3BucketEnvVar)
+    private val logger = LoggerFactory.getLogger(EnvVars::class.java)
+    override val writer = WriterTypes.valueOf(System.getenv(uploadDestinationEnvVar) ?: WriterTypes.WHYLABS.name)
 
-        val port = System.getenv("PORT")?.toInt() ?: 8080
-        val debug = System.getenv("DEBUG")?.toBoolean() ?: false
+    override val whylabsApiEndpoint = System.getenv("WHYLABS_API_ENDPOINT") ?: "https://api.whylabsapp.com"
+    override val orgId = requireIf(writer == WriterTypes.WHYLABS, "ORG_ID")
+
+    override val emptyProfilesDatasetIds: List<String> = try {
+        val envVar = System.getenv(emptyProfilesDatasetIdsEnvVar) ?: "[]"
+        objectMapper.readValue(envVar)
+    } catch (e: JsonParseException) {
+        logger.error("Couldn't parse $emptyProfilesDatasetIdsEnvVar env var. It should be a json list of dataset ids.", e)
+        throw e
     }
+
+    override val requestQueueingMode =
+        RequestQueueingMode.valueOf(System.getenv("REQUEST_QUEUEING_MODE") ?: RequestQueueingMode.SQLITE.name)
+    override val requestQueueProcessingIncrement = parseQueueIncrement()
+
+    override val whylabsApiKey = requireIf(writer == WriterTypes.WHYLABS, "WHYLABS_API_KEY")
+    override val period = require("WHYLOGS_PERIOD")
+    override val expectedApiKey = require("CONTAINER_API_KEY")
+
+    // Just use a single writer until we get requests otherwise to simplify the error handling logic
+    override val s3Prefix = System.getenv(s3PrefixEnvVar) ?: ""
+    override val s3Bucket = requireIf(writer == WriterTypes.S3, s3BucketEnvVar)
+
+    override val port = System.getenv("PORT")?.toInt() ?: 8080
+    override val debug = System.getenv("DEBUG")?.toBoolean() ?: false
 }
 
 private fun require(envName: String) = requireIf(true, envName)
@@ -53,7 +85,6 @@ private fun requireIf(condition: Boolean, envName: String, fallback: String = ""
 
     return value ?: fallback
 }
-
 
 // TODO expose this and document it when we have a client that hits OOM issues because they have massive requests
 // to the container. By default, the requests are cached using sqlite and they are periodically merged into the

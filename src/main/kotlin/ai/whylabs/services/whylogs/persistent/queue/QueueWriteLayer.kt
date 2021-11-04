@@ -1,6 +1,6 @@
 package ai.whylabs.services.whylogs.persistent.queue
 
-interface WriteLayer<T> {
+interface QueueWriteLayer<T> {
     /**
      * Specify whether or not this write layer is capable of handling reads and writes
      * concurrently. The queue handler will parallelize the incoming read/write requests
@@ -18,4 +18,3 @@ interface WriteLayer<T> {
         }
     }
 }
-

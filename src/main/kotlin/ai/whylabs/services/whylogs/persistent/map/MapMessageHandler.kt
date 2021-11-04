@@ -57,7 +57,6 @@ internal fun <K, V> mapMessageHandler(options: MapMessageHandlerOptions<K, V>) =
                 msg.done.completeExceptionally(t)
             }
         }
-
     }
 
 private suspend fun <K, V> get(
@@ -128,5 +127,4 @@ private suspend fun <K, V> reset(
         message.done.complete(null)
         logger.debug("Done resetting item")
     }
-
 }

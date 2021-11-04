@@ -22,5 +22,3 @@ fun DatasetProfile.merge(request: LogRequest) {
         }
     }
 }
-
-

@@ -4,8 +4,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
-
-internal class SqliteMapWriteLayerTest {
+internal class SqliteMapQueueWriteLayerTest {
 
     private val layer = SqliteMapWriteLayer("SqliteMapWriteLayerTest ", StringSerializer(), StringSerializer())
 
@@ -25,5 +24,4 @@ internal class SqliteMapWriteLayerTest {
         Assertions.assertEquals(expected, all)
         Assertions.assertEquals(2, layer.size())
     }
-
 }
