@@ -17,28 +17,37 @@ jobs:
         with:
           java-version: "11"
           distribution: "adopt"
-          # cache: gradle
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
-      - name: Build with Gradle
-        run: make build
-      - name: Cleanup Gradle Cache
-        # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
-        # Restoring these files from a GitHub Actions cache might cause problems for future builds.
-        # https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-gradle
+
+      # - name: Build with Gradle
+      #   run: ./gradlew installDist
+      # - name: Run unit tests
+      #   run: ./gradlew test
+
+      - uses: gradle/gradle-build-action@v2
+        with:
+          arguments: installDist
+      - uses: gradle/gradle-build-action@v2
+        with:
+          arguments: test
+      - name: tar artifacts for upload to preserve file permissions
         run: |
-          rm -f ~/.gradle/caches/modules-2/modules-2.lock
-          rm -f ~/.gradle/caches/modules-2/gc.properties
-      - uses: actions/upload-artifact@v2
+          tar -cvf build.tar build/install 
+          tar -cvf scripts.tar scripts
+          ls -l
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v2
         with:
           name: build_artifacts
+          if-no-files-found: error
           path: |
-            build/install
-            scripts
+            scripts.tar
+            build.tar
             supervisord.conf
 
-  publish:
-    name: Publish image to Dockerhub
+  build_docker_image:
+    name: Build the Docker image
     needs: build
     runs-on: ubuntu-latest
 
@@ -48,5 +57,28 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: build_artifacts
+      - name: untar artifacts 
+        run: |
+          tar -xf build.tar
+          tar -xf scripts.tar
       - name: Build the Docker image
-        run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+        run: docker build . --tag whylabs/whylogs:$GITHUB_SHA --tag whylabs/whylogs:latest
+
+  publish_docker_image:
+    name: Publish the Docker image to Docker Hub
+    # if: ${{ !env.ACT }}
+    needs: build_docker_image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Log in to the Container registry
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: docker push
+        run: |
+          docker push whylabs/whylogs:$GITHUB_SHA
+          docker push whylabs/whylogs:latest
+      - run: echo "Pushed whylabs/whylogs:$GITHUB_SHA"
