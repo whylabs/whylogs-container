@@ -19,55 +19,19 @@ jobs:
           distribution: "adopt"
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
-
-      # - name: Build with Gradle
-      #   run: ./gradlew installDist
-      # - name: Run unit tests
-      #   run: ./gradlew test
-
       - uses: gradle/gradle-build-action@v2
         with:
           arguments: installDist
       - uses: gradle/gradle-build-action@v2
         with:
           arguments: test
-      - name: tar artifacts for upload to preserve file permissions
-        run: |
-          tar -cvf build.tar build/install 
-          tar -cvf scripts.tar scripts
-          ls -l
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: build_artifacts
-          if-no-files-found: error
-          path: |
-            scripts.tar
-            build.tar
-            supervisord.conf
-
-  build_docker_image:
-    name: Build the Docker image
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v2
-      - name: Download build artifacts
-        uses: actions/download-artifact@v2
-        with:
-          name: build_artifacts
-      - name: untar artifacts 
-        run: |
-          tar -xf build.tar
-          tar -xf scripts.tar
       - name: Build the Docker image
         run: docker build . --tag whylabs/whylogs:$GITHUB_SHA --tag whylabs/whylogs:latest
 
   publish_docker_image:
     name: Publish the Docker image to Docker Hub
     # if: ${{ !env.ACT }}
-    needs: build_docker_image
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
