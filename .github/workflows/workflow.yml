@@ -1,4 +1,4 @@
-name: Build
+name: Workflow
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
 
 jobs:
   build:
+    name: Build Kotlin code and Docker Image
     runs-on: ubuntu-latest
 
     steps:
@@ -24,17 +25,16 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           arguments: installDist
+      - name: Ktlint
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: ktlintCheck
       - name: Unit tests
         uses: gradle/gradle-build-action@v2
         with:
           arguments: test
 
       # Docker stuff
-      - name: Create docker tag name
-        run: |
-          echo "Using tag ${{ github.sha }}"
-          echo "tag=whylabs/whylogs:${{ github.sha }}" >> $GITHUB_ENV
-          echo "from env ${{ env.tag }}"
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
       - name: Set up Docker Buildx
@@ -46,6 +46,14 @@ jobs:
           load: true
           push: false
           tags: whylabs/whylogs:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/whylogs-container.tar
+      - name: Upload container artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: container
+          path: /tmp/whylogs-container.tar
+      - name: Print container tag
+        run: echo "Using tag ${{ github.sha }}"
 
   publish_docker_image:
     name: Publish the Docker image to Docker Hub
@@ -59,6 +67,15 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Download container artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: container
+          path: /tmp
+      - name: Load Docker image
+        run: |
+          docker load --input /tmp/whylogs-container.tar
+          docker image ls -a
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
