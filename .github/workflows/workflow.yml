@@ -75,11 +75,9 @@ jobs:
       - name: Load Docker image
         run: |
           docker load --input /tmp/whylogs-container.tar
+          docker tag whylabs/whylogs:${{ github.sha }} whylabs/whylogs:latest
           docker image ls -a
-      - name: Build and push
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          platforms: linux/amd64
-          push: true
-          tags: whylabs/whylogs:${{ github.sha }}
+      - name: Push Docker container
+        run: |
+          docker push whylabs/whylogs:${{ github.sha }}
+          docker push whylabs/whylogs:latest
