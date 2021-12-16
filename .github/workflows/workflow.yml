@@ -48,12 +48,11 @@ jobs:
           tags: whylabs/whylogs:${{ github.sha }}
           outputs: type=docker,dest=/tmp/whylogs-container.tar
       - name: Upload container artifact
+        if: ${{ !github.event.act }}
         uses: actions/upload-artifact@v2
         with:
           name: container
           path: /tmp/whylogs-container.tar
-      - name: Print container tag
-        run: echo "Using tag ${{ github.sha }}"
 
   publish_docker_image:
     name: Publish the Docker image to Docker Hub
