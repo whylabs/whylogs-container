@@ -1,18 +1,26 @@
-
 Image on [Docker Hub](https://hub.docker.com/repository/docker/whylabs/whylogs)
+
+## Before Pushing
+
+You can test the Github CI by running `./build-scripts/act.sh` after you install [act](https://github.com/nektos/act). This will set up the artifact server that you need locally along side the act run, since the build depends on having one present.
+
+
+### act Setup
+
+- Create `~/.act-events.json` with this content: `{"act": true}` to enable skipping certain steps locally.
 
 ## Building Docker image
 
-* To build the docker image (locally):
+- To build the docker image (locally):
 
 ```
-gw installDist && docker build . -t whycontainer
+make build-docker
 ```
 
 ## Running the Docker image
 
-* You should prepare a `local.env` file in your workspace with the following content. Make sure you configure the heap to the appropriate size of your
-  container. The heap size also determines how many concurrent dataset profiles you can track at the same time (i.e. number of tag key-value combination)
+- You should prepare a `local.env` file in your workspace with the following content. Make sure you configure the heap to the appropriate size of your
+  container. The heap size also determines how many concurrent dataset profiles you can track at the same time (i.e. number of tag key-value combination). You can omit it for quick tests is the JVM defaults are fine of course.
 
 ```
 WHYLOGS_PERIOD=HOURS (default is HOURS if unspecified. Supported values: MINUTES, HOURS, DAYS)
@@ -32,7 +40,7 @@ WHYLABS_API_ENDPOINT=http://localhost:8080
 WHYLABS_API_KEY=xxxxxx
 
 # Each request to the container will have to provide an X-API-Key header with the
-# following value. 
+# following value.
 CONTAINER_API_KEY=secret-key
 
 # Required for uploading to whylabs. Specify an organization ID that is accessible with your WHYLABS_API_KEY.
@@ -53,18 +61,22 @@ REQUEST_QUEUEING_MODE=SQLITE #default
 REQUEST_QUEUEING_MODE=IN_MEMORY
 ```
 
-* Run the Docker image with the following command:
+- Run the Docker image with the following command:
 
 ```
 docker run -it --rm -p 127.0.0.1:8080:8080 --env-file local.env --name whycontainer whycontainer
 ```
 
-* Or run the service directly without docker
+- Or run the service directly without docker
 
 ```
-gw run
-gw run --debug-jvm
+make run
+
+# which just runs
+./gradlew run
 ```
+
+You can see a bunch of canned commands with `make help` as well. The makefile is essentially a list of canned commands for this repository.
 
 If you run it directly then you'll need to make sure the env variables are in your shell environment since docker isn't there to load them for you anymore.
 
