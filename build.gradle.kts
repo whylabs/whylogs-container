@@ -53,7 +53,7 @@ dependencies {
 
     implementation("org.apache.commons:commons-lang3:3.11")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
-    runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:2.13.3")
+    runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:2.16.0")
     implementation("org.xerial:sqlite-jdbc:3.34.0")
     implementation("com.michael-bull.kotlin-retry:kotlin-retry:1.0.8")
 
