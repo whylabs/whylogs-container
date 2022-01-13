@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.jacksonMapperBuilder
 import com.fasterxml.jackson.module.kotlin.readValue
 import io.javalin.http.Context
@@ -77,7 +78,7 @@ Pass the input in single entry format (a JSON object) or a multiple entry format
 * Set `multiple` key if you're passing multiple data at once. Here are the required fields:
   * `columns`: specify an `array` of features
   * `data`: array of actual data points
-Example: 
+Example:
 ```
 {
   "datasetId": "demo-model",
@@ -143,28 +144,35 @@ Here is an example from the output above
         responses = [OpenApiResponse("200"), OpenApiResponse("400", description = "Bad or invalid input body")]
     )
     fun track(ctx: Context) {
-        val request: LogRequest = try {
-            mapper.readValue(ctx.body())
+        val body = ctx.body()
+        try {
+            val request: LogRequest = mapper.readValue(body)
+
+            if (request.single == null && request.multiple == null) {
+                return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
+                return
+            }
+
+            // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
+            // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
+            val prefixedTags = if (envVars.writer == WriterTypes.S3) request.tags else request.tags?.mapKeys { (key) ->
+                "$SegmentTagPrefix$key"
+            }
+
+            val processedRequest = request.copy(tags = prefixedTags)
+
+            runBlocking {
+                profileManager.enqueue(processedRequest)
+            }
+        } catch (t: MismatchedInputException) {
+            logger.warn("Invalid request format: $body", t)
+            throw IllegalArgumentException("Invalid request format: $body", t)
         } catch (t: JsonParseException) {
-            logger.error(t.message, t)
-            throw IllegalArgumentException(t.message)
-        }
-
-        if (request.single == null && request.multiple == null) {
-            return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
-            return
-        }
-
-        // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
-        // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
-        val prefixedTags = if (envVars.writer == WriterTypes.S3) request.tags else request.tags?.mapKeys { (key) ->
-            "$SegmentTagPrefix$key"
-        }
-
-        val processedRequest = request.copy(tags = prefixedTags)
-
-        runBlocking {
-            profileManager.enqueue(processedRequest)
+            logger.warn("Invalid request format: $body", t)
+            throw IllegalArgumentException("Invalid request format: $body", t)
+        } catch (t: Throwable) {
+            logger.error("Error handling request $body", t)
+            throw t
         }
     }
 
