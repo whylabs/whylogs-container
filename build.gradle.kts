@@ -38,8 +38,8 @@ tasks.withType<KotlinCompile>().configureEach {
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.4.10")
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.4.10")
-    implementation("io.javalin:javalin:3.11.2")
-    implementation("io.javalin:javalin-openapi:3.11.2")
+    implementation("io.javalin:javalin:4.3.0")
+    implementation("io.javalin:javalin-openapi:4.3.0")
     implementation("io.swagger.core.v3:swagger-core:2.1.5")
     implementation("org.webjars:swagger-ui:3.24.3")
 
