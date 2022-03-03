@@ -1,5 +1,10 @@
 package ai.whylabs.services.whylogs.core
 
+import ai.whylabs.services.whylogs.core.config.IEnvVars
+import ai.whylabs.services.whylogs.core.config.KafkaConfig
+import ai.whylabs.services.whylogs.core.config.ProfileWritePeriod
+import ai.whylabs.services.whylogs.core.config.WriteLayer
+import ai.whylabs.services.whylogs.core.config.WriterTypes
 import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
 import com.whylogs.core.DatasetProfile
@@ -31,6 +36,8 @@ private class WhyLabsEnvVars : IEnvVars {
     override val s3Bucket = "test-bucket"
     override val port = 8080
     override val debug = false
+    override val fileSystemWriterRoot = ""
+    override val kafkaConfig = null
 }
 
 class WhyLogsProfileManagerTest {

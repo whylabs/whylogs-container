@@ -1,7 +1,7 @@
 package ai.whylabs.services.whylogs.core.writer
 
-import ai.whylabs.services.whylogs.core.EnvVars
-import ai.whylabs.services.whylogs.core.IEnvVars
+import ai.whylabs.services.whylogs.core.config.EnvVars
+import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.core.randomAlphaNumericId
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
 import com.amazonaws.regions.DefaultAwsRegionProviderChain
@@ -15,7 +15,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-class S3Writer(private val envVars: IEnvVars = EnvVars()) : Writer {
+class S3Writer(private val envVars: IEnvVars = EnvVars.instance) : Writer {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     private val keyFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(ZoneId.from(ZoneOffset.UTC))
@@ -28,7 +28,7 @@ class S3Writer(private val envVars: IEnvVars = EnvVars()) : Writer {
         .withCredentials(DefaultAWSCredentialsProviderChain())
         .build()
 
-    override suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String): String {
+    override suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String): WriteResult {
         val tags = parseTags(profile, removePrefixes = false) // There won't be prefixes if we're uploading to s3
         val tagString = getTagString(tags)
 
@@ -54,7 +54,7 @@ class S3Writer(private val envVars: IEnvVars = EnvVars()) : Writer {
                 s3Client.putObject(envVars.s3Bucket, key, bytes, metadata)
             }
             logger.info("Uploaded profile ${profile.sessionId} with tags $tagString to s3 with key $key")
-            return "s3://${envVars.s3Bucket}/$key" // TODO better way of getting the format?
+            return WriteResult("s3", "s3://${envVars.s3Bucket}/$key")
         } catch (t: Throwable) {
             logger.error("Failed to upload profile to s3", t)
             throw t // TODO why didn't I throw these before?

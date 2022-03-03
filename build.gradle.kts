@@ -82,6 +82,9 @@ dependencies {
     implementation("io.swagger.core.v3:swagger-core:2.1.13")
     implementation("org.webjars:swagger-ui:3.24.3")
 
+    implementation("org.apache.kafka:kafka-streams:3.1.0")
+    implementation("org.apache.kafka:kafka-clients:3.1.0")
+
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.12.3")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.10.1")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.10.1")
@@ -109,5 +112,6 @@ dependencies {
 
 application {
     mainClass.set("ai.whylabs.services.whylogs.MainKt")
+    // This lets us see which coroutine work is happening on. Important for debugging.
     applicationDefaultJvmArgs = listOf("-Dkotlinx.coroutines.debug")
 }

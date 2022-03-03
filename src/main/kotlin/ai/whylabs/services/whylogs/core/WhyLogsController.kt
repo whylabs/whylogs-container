@@ -1,5 +1,9 @@
 package ai.whylabs.services.whylogs.core
 
+import ai.whylabs.services.whylogs.core.config.EnvVars
+import ai.whylabs.services.whylogs.core.config.IEnvVars
+import ai.whylabs.services.whylogs.core.config.WriterTypes
+import ai.whylabs.services.whylogs.kafka.KotlinConsumer
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import io.javalin.http.Context
@@ -22,7 +26,7 @@ const val DatasetIdTag = "datasetId"
 const val OrgIdTag = "orgId"
 
 class WhyLogsController(
-    private val envVars: IEnvVars = EnvVars(),
+    private val envVars: IEnvVars = EnvVars.instance,
     private val profileManager: WhyLogsProfileManager = WhyLogsProfileManager(envVars = envVars),
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)

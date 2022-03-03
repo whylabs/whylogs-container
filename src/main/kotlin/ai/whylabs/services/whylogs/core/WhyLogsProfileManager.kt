@@ -1,7 +1,11 @@
 package ai.whylabs.services.whylogs.core
 
 import ai.whylabs.service.invoker.ApiException
+import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.writer.Writer
+import ai.whylabs.services.whylogs.core.config.IEnvVars
+import ai.whylabs.services.whylogs.core.config.ProfileWritePeriod
+import ai.whylabs.services.whylogs.core.config.WriteLayer
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMap
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMapConfig
 import ai.whylabs.services.whylogs.persistent.map.InMemoryMapWriteLayer
@@ -13,8 +17,6 @@ import ai.whylabs.services.whylogs.persistent.queue.PersistentQueue
 import ai.whylabs.services.whylogs.persistent.queue.QueueOptions
 import ai.whylabs.services.whylogs.persistent.queue.SqliteQueueWriteLayer
 import com.whylogs.core.DatasetProfile
-import kotlinx.coroutines.runBlocking
-import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -22,11 +24,13 @@ import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 
 class WhyLogsProfileManager(
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
     currentTime: Instant = Instant.now(), // TODO this needs to be configurable and included on disk somehow for integ tests
-    private val envVars: IEnvVars = EnvVars(),
+    private val envVars: IEnvVars = EnvVars.instance,
     private val writer: Writer = envVars.getProfileWriter(),
     private val orgId: String = envVars.orgId,
     private val sessionId: String = UUID.randomUUID().toString(),
@@ -70,6 +74,7 @@ class WhyLogsProfileManager(
         )
     )
 
+    // TODO may not need the request buffering in kafka mode
     internal val config = QueueBufferedPersistentMapConfig(
         queue = queue,
         map = map,
@@ -192,11 +197,11 @@ class WhyLogsProfileManager(
     }
 
     internal suspend fun writeOutProfiles(): WriteProfilesResult {
-        logger.info("Writing out all profiles")
 
         val profilePaths = mutableListOf<String>()
         var profilesWritten = 0
         profiles.map.reset { stagedProfiles ->
+            logger.info("Writing out profiles. Total: ${stagedProfiles.size}")
             stagedProfiles.filter { profileEntry ->
                 logger.info("Writing out profiles for tags: {}", profileEntry.key)
                 val profile = profileEntry.value.profile
@@ -204,8 +209,8 @@ class WhyLogsProfileManager(
                 val datasetId = profileEntry.value.datasetId
 
                 try {
-                    writer.write(profile, orgId, datasetId)?.let {
-                        profilePaths.add(it)
+                    writer.write(profile, orgId, datasetId).let { result ->
+                        result.uri?.let { profilePaths.add(it) }
                         profilesWritten++
                     }
 
@@ -213,7 +218,7 @@ class WhyLogsProfileManager(
                 } catch (e: ApiException) {
                     logger.error(
                         """
-                        API Exception writing to whylabs. Keeping profile ${profileEntry.key} to try later. 
+                        API Exception writing to whylabs. Keeping profile ${profileEntry.key} to try later.
                         Response: ${e.responseBody}
                         Headers: ${e.responseHeaders}
                         """.trimIndent(),
