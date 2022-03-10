@@ -1,6 +1,7 @@
 package ai.whylabs.services.whylogs
 
 import ai.whylabs.services.whylogs.core.EnvVars
+import ai.whylabs.services.whylogs.core.IEnvVars
 import ai.whylabs.services.whylogs.core.WhyLogsController
 import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.DeserializationFeature
@@ -27,9 +28,12 @@ private val mapper = jacksonMapperBuilder()
         configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
     }
 
-fun main(): Unit = try {
-    val whylogs = WhyLogsController()
-    val envVars = EnvVars()
+fun main() {
+    startServer()
+}
+
+fun startServer(envVars: IEnvVars = EnvVars()): Javalin = try {
+    val whylogs = WhyLogsController(envVars)
 
     Javalin.create {
         it.registerPlugin(getConfiguredOpenApiPlugin())
@@ -39,6 +43,8 @@ fun main(): Unit = try {
     }.apply {
         Runtime.getRuntime().addShutdownHook(Thread { stop() })
         before("logs", whylogs::preprocess)
+        before("writeProfiles", whylogs::preprocess)
+
         exception(IllegalArgumentException::class.java) { e, ctx ->
             ctx.json(e.message ?: "Bad Request").status(400)
         }
@@ -46,13 +52,15 @@ fun main(): Unit = try {
             path("logs") {
                 post(whylogs::track)
             }
+            path("writeProfiles") {
+                post(whylogs::writeProfiles)
+            }
         }
         after("logs", whylogs::after)
-    }.start(envVars.port)
-
-    // TODO make a call to list models to test the api key on startup as a health check
-
-    logger.info("Checkout Swagger UI at http://localhost:${envVars.port}/swagger-ui")
+        // TODO make a call to list models to test the api key on startup as a health check
+        logger.info("Checkout Swagger UI at http://localhost:${envVars.port}/swagger-ui")
+        start(envVars.port)
+    }
 } catch (t: Throwable) {
     // Need to manually shut down here because our manager hooks itself up to runtime hooks
     // and starts a background thread. It would keep the JVM alive without javalin running.

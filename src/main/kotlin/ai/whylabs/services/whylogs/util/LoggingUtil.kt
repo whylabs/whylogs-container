@@ -7,7 +7,7 @@ import java.lang.invoke.MethodHandles
 object LoggingUtil {
 
     /**
-     * Util function for getting a loggert for a Kotlin file that has no top level class.
+     * Util function for getting a logger for a Kotlin file that has no top level class.
      * It will end up using the class name of the generated Java class, which looks something
      * like `FileNameKt`.
      */

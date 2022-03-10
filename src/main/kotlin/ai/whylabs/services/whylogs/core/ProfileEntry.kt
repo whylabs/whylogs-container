@@ -18,7 +18,14 @@ internal class ProfileKeySerializer : Serializer<ProfileKey> by serializer()
 
 data class BufferedLogRequest(
     val request: LogRequest,
+    /**
+     * This is the time that the server was started. It's mostly useful for debugging
+     * profiles and tracing their creation.
+     */
     val sessionTime: Instant,
+    /**
+     * This effectively controls the dataset timestamp.
+     */
     val windowStartTime: Instant
 )
 

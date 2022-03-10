@@ -1,18 +1,23 @@
 package ai.whylabs.services.whylogs.core
 
+import ai.whylabs.services.whylogs.core.writer.DebugFileSystemWriter
+import ai.whylabs.services.whylogs.core.writer.S3Writer
+import ai.whylabs.services.whylogs.core.writer.WhyLabsWriter
+import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.slf4j.LoggerFactory
+import java.time.temporal.ChronoUnit
 
-enum class RequestQueueingMode {
+enum class WriteLayer {
     SQLITE,
     IN_MEMORY
 }
 
 enum class WriterTypes {
-    S3, WHYLABS
+    S3, WHYLABS, DEBUG_FILE_SYSTEM
 }
 
 private const val uploadDestinationEnvVar = "UPLOAD_DESTINATION"
@@ -24,15 +29,42 @@ private val objectMapper = jacksonObjectMapper()
 
 interface IEnvVars {
     val writer: WriterTypes
+
+    fun getProfileWriter(): Writer {
+        return when (this.writer) {
+            WriterTypes.S3 -> S3Writer(this)
+            WriterTypes.WHYLABS -> WhyLabsWriter(this)
+            WriterTypes.DEBUG_FILE_SYSTEM -> DebugFileSystemWriter(this)
+        }
+    }
+
     val whylabsApiEndpoint: String
     val orgId: String
 
     val emptyProfilesDatasetIds: List<String>
-    val requestQueueingMode: RequestQueueingMode
+    val requestQueueingMode: WriteLayer
+    val profileStorageMode: WriteLayer
 
     val requestQueueProcessingIncrement: PopSize
     val whylabsApiKey: String
-    val period: String
+
+    val fileSystemWriterRoot: String
+        get() = "whylogs-profiles"
+
+    /**
+     * The period to group profiles into. If this is hourly then you'll end up
+     * with hourly profiles. This should probably be set to the same time period
+     * as the model that it's uploading to in WhyLabs.
+     */
+    val whylogsPeriod: ChronoUnit
+
+    /**
+     * This controls how often profiles are written out. If this is set to hourly
+     * and the [whylogsPeriod] is set to daily then profiles will still be bucked into
+     * days, but they'll be written out every hour. By default, this will match the
+     * [whylogsPeriod].
+     */
+    val profileWritePeriod: ProfileWritePeriod
     val expectedApiKey: String
 
     val s3Prefix: String
@@ -40,6 +72,13 @@ interface IEnvVars {
 
     val port: Int
     val debug: Boolean
+}
+
+enum class ProfileWritePeriod(val chronoUnit: ChronoUnit?) {
+    MINUTES(ChronoUnit.MINUTES),
+    HOURS(ChronoUnit.HOURS),
+    DAYS(ChronoUnit.DAYS),
+    ON_DEMAND(null)
 }
 
 class EnvVars : IEnvVars {
@@ -59,11 +98,15 @@ class EnvVars : IEnvVars {
     }
 
     override val requestQueueingMode =
-        RequestQueueingMode.valueOf(System.getenv("REQUEST_QUEUEING_MODE") ?: RequestQueueingMode.SQLITE.name)
+        WriteLayer.valueOf(System.getenv("REQUEST_QUEUEING_MODE") ?: WriteLayer.SQLITE.name)
+    override val profileStorageMode =
+        WriteLayer.valueOf(System.getenv("PROFILE_STORAGE_MODE") ?: WriteLayer.SQLITE.name)
     override val requestQueueProcessingIncrement = parseQueueIncrement()
 
     override val whylabsApiKey = requireIf(writer == WriterTypes.WHYLABS, "WHYLABS_API_KEY")
-    override val period = require("WHYLOGS_PERIOD")
+
+    override val whylogsPeriod = ChronoUnit.valueOf(require("WHYLOGS_PERIOD"))
+    override val profileWritePeriod = ProfileWritePeriod.valueOf(System.getenv("PROFILE_WRITE_PERIOD") ?: whylogsPeriod.name)
     override val expectedApiKey = require("CONTAINER_API_KEY")
 
     // Just use a single writer until we get requests otherwise to simplify the error handling logic

@@ -29,7 +29,7 @@ internal sealed class PersistentQueueMessage<T>(val done: CompletableDeferred<Un
 private typealias MessageHandler <T> = suspend (message: PersistentQueueMessage<T>) -> Unit
 
 private fun <T> CoroutineScope.messageHandler(options: QueueOptions<T>): MessageHandler<T> {
-    return if (options.queueWriteLayer.concurrentReadWrites) concurrentMessageHandler(options) else serialMessageHandler(options)
+    return if (options.queueWriteLayer.concurrentPushPop) concurrentMessageHandler(options) else serialMessageHandler(options)
 }
 
 private fun <T> CoroutineScope.concurrentMessageHandler(options: QueueOptions<T>): MessageHandler<T> {
