@@ -25,26 +25,27 @@ class BufferedPersistentMapTest {
     lateinit var queue: PersistentQueue<String>
     lateinit var config: QueueBufferedPersistentMapConfig<String, String, Int>
 
+    lateinit var mapLayer: SqliteMapWriteLayer<String, Int>
+    lateinit var queueLayer: SqliteQueueWriteLayer<String>
+
     @BeforeEach
     fun init() = runBlocking {
-        queue = PersistentQueue(
-            QueueOptions(
-                SqliteQueueWriteLayer(
-                    "test-queue",
-                    StringSerializer()
-                )
-            )
+        queueLayer = SqliteQueueWriteLayer(
+            "test-queue",
+            StringSerializer()
         )
+        mapLayer = SqliteMapWriteLayer(
+            "test-map",
+            StringSerializer(),
+            IntSerializer()
+        )
+
+        queue = PersistentQueue(QueueOptions(queueLayer))
         config = QueueBufferedPersistentMapConfig(
             queue = queue,
+            buffer = true,
             map = PersistentMap(
-                MapMessageHandlerOptions(
-                    SqliteMapWriteLayer(
-                        "test-map",
-                        StringSerializer(),
-                        IntSerializer()
-                    )
-                ).apply {
+                MapMessageHandlerOptions(mapLayer).apply {
                     writeLayer.reset(emptyMap())
                 }
             ),
@@ -59,6 +60,8 @@ class BufferedPersistentMapTest {
 
     @AfterEach
     fun after() {
+        mapLayer.close()
+        queueLayer.close()
     }
 
     @Test
@@ -66,8 +69,8 @@ class BufferedPersistentMapTest {
         val bufferedMap = QueueBufferedPersistentMap(config)
 
         // Add some stuff
-        bufferedMap.buffer("first")
-        bufferedMap.buffer("second")
+        bufferedMap.merge("first")
+        bufferedMap.merge("second")
 
         // Merge bufferedMap into the map
         val doneMerging = CompletableDeferred<Unit>()
@@ -105,10 +108,10 @@ class BufferedPersistentMapTest {
         )
 
         // Add some stuff
-        bufferedMap.buffer("a")
-        bufferedMap.buffer("a")
-        bufferedMap.buffer("b")
-        bufferedMap.buffer("c")
+        bufferedMap.merge("a")
+        bufferedMap.merge("a")
+        bufferedMap.merge("b")
+        bufferedMap.merge("c")
 
         // Merge bufferedMap into the map
         val doneMerging = CompletableDeferred<Unit>()

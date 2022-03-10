@@ -1,8 +1,10 @@
 package ai.whylabs.services.whylogs
 
-import ai.whylabs.services.whylogs.core.EnvVars
-import ai.whylabs.services.whylogs.core.IEnvVars
 import ai.whylabs.services.whylogs.core.WhyLogsController
+import ai.whylabs.services.whylogs.core.WhyLogsProfileManager
+import ai.whylabs.services.whylogs.core.config.EnvVars
+import ai.whylabs.services.whylogs.core.config.IEnvVars
+import ai.whylabs.services.whylogs.kafka.ConsumerController
 import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonMapperBuilder
@@ -15,7 +17,6 @@ import io.javalin.plugin.openapi.OpenApiPlugin
 import io.javalin.plugin.openapi.ui.SwaggerOptions
 import io.swagger.v3.oas.models.info.Info
 import org.slf4j.LoggerFactory
-import java.lang.IllegalArgumentException
 import kotlin.system.exitProcess
 
 private val logger = LoggerFactory.getLogger("ai.whylabs.services.whylogs")
@@ -32,8 +33,12 @@ fun main() {
     startServer()
 }
 
-fun startServer(envVars: IEnvVars = EnvVars()): Javalin = try {
-    val whylogs = WhyLogsController(envVars)
+fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
+    val profileManager = WhyLogsProfileManager(envVars = envVars)
+    if (envVars.kafkaConfig != null) {
+        ConsumerController(envVars, profileManager)
+    }
+    val whylogs = WhyLogsController(envVars, profileManager)
 
     Javalin.create {
         it.registerPlugin(getConfiguredOpenApiPlugin())

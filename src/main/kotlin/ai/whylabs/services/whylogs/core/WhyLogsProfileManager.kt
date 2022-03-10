@@ -1,6 +1,10 @@
 package ai.whylabs.services.whylogs.core
 
 import ai.whylabs.service.invoker.ApiException
+import ai.whylabs.services.whylogs.core.config.EnvVars
+import ai.whylabs.services.whylogs.core.config.IEnvVars
+import ai.whylabs.services.whylogs.core.config.ProfileWritePeriod
+import ai.whylabs.services.whylogs.core.config.WriteLayer
 import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMap
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMapConfig
@@ -26,7 +30,7 @@ import java.util.concurrent.TimeUnit
 class WhyLogsProfileManager(
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
     currentTime: Instant = Instant.now(), // TODO this needs to be configurable and included on disk somehow for integ tests
-    private val envVars: IEnvVars = EnvVars(),
+    private val envVars: IEnvVars = EnvVars.instance,
     private val writer: Writer = envVars.getProfileWriter(),
     private val orgId: String = envVars.orgId,
     private val sessionId: String = UUID.randomUUID().toString(),
@@ -73,6 +77,7 @@ class WhyLogsProfileManager(
     internal val config = QueueBufferedPersistentMapConfig(
         queue = queue,
         map = map,
+        buffer = envVars.requestQueueingEnabled,
         defaultValue = { profileKey ->
             ProfileEntry(
                 profile = DatasetProfile(
@@ -99,7 +104,7 @@ class WhyLogsProfileManager(
             )
         },
         mergeBlock = { profile, logRequest ->
-            profile.profile.merge(logRequest.request)
+            profile.profile.merge(logRequest.request, envVars.ignoredKeys)
             profile
         }
     )
@@ -140,8 +145,8 @@ class WhyLogsProfileManager(
         }
     }
 
-    suspend fun enqueue(request: LogRequest) {
-        profiles.buffer(
+    suspend fun handle(request: LogRequest) {
+        profiles.merge(
             BufferedLogRequest(
                 request = request,
                 sessionTime = sessionTimeState,
@@ -170,7 +175,7 @@ class WhyLogsProfileManager(
     private suspend fun initializeProfiles() {
         envVars.emptyProfilesDatasetIds.forEach { datasetId ->
             logger.info("Initializing empty profile for $datasetId")
-            enqueue(
+            handle(
                 LogRequest(
                     datasetId = datasetId,
                     tags = null,
@@ -192,11 +197,11 @@ class WhyLogsProfileManager(
     }
 
     internal suspend fun writeOutProfiles(): WriteProfilesResult {
-        logger.info("Writing out all profiles")
 
         val profilePaths = mutableListOf<String>()
         var profilesWritten = 0
         profiles.map.reset { stagedProfiles ->
+            logger.info("Writing out profiles. Total: ${stagedProfiles.size}")
             stagedProfiles.filter { profileEntry ->
                 logger.info("Writing out profiles for tags: {}", profileEntry.key)
                 val profile = profileEntry.value.profile
@@ -204,8 +209,8 @@ class WhyLogsProfileManager(
                 val datasetId = profileEntry.value.datasetId
 
                 try {
-                    writer.write(profile, orgId, datasetId)?.let {
-                        profilePaths.add(it)
+                    writer.write(profile, orgId, datasetId).let { result ->
+                        result.uri?.let { profilePaths.add(it) }
                         profilesWritten++
                     }
 
@@ -213,16 +218,16 @@ class WhyLogsProfileManager(
                 } catch (e: ApiException) {
                     logger.error(
                         """
-                        API Exception writing to whylabs. Keeping profile ${profileEntry.key} to try later. 
+                        API Exception writing to whylabs. Keeping profile ${profileEntry.key} to try later.
                         Response: ${e.responseBody}
                         Headers: ${e.responseHeaders}
                         """.trimIndent(),
                         e
                     )
                     true
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     logger.error(
-                        "Unexpected exception writing to whylabs. Keeping profile ${profileEntry.key} to try later",
+                        "Unexpected exception writing profiles. Keeping profile ${profileEntry.key} to try later",
                         e
                     )
                     true

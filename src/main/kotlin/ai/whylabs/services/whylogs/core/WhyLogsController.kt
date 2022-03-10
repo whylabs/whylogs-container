@@ -1,5 +1,8 @@
 package ai.whylabs.services.whylogs.core
 
+import ai.whylabs.services.whylogs.core.config.EnvVars
+import ai.whylabs.services.whylogs.core.config.IEnvVars
+import ai.whylabs.services.whylogs.core.config.WriterTypes
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import io.javalin.http.Context
@@ -22,17 +25,16 @@ const val DatasetIdTag = "datasetId"
 const val OrgIdTag = "orgId"
 
 class WhyLogsController(
-    private val envVars: IEnvVars = EnvVars(),
+    private val envVars: IEnvVars = EnvVars.instance,
     private val profileManager: WhyLogsProfileManager = WhyLogsProfileManager(envVars = envVars),
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     fun preprocess(ctx: Context) {
-        // This shouldn't actually happen. Swagger will take care of the validation.
         val apiKey = ctx.header(apiKeyHeader)
-            ?: throw IllegalArgumentException("Missing api key in request")
 
         if (apiKey != envVars.expectedApiKey) {
+            logger.warn("Dropping request because of invalid API key")
             throw UnauthorizedResponse("Invalid API key")
         }
     }
@@ -142,7 +144,7 @@ Here is an example from the output above
             val processedRequest = request.copy(tags = prefixedTags)
 
             runBlocking {
-                profileManager.enqueue(processedRequest)
+                profileManager.handle(processedRequest)
             }
         } catch (t: MismatchedInputException) {
             logger.warn("Invalid request format", t)
@@ -169,7 +171,13 @@ Here is an example from the output above
     )
     fun writeProfiles(ctx: Context) {
         return runBlocking {
-            val result = profileManager.writeOutProfiles()
+            val result = try {
+                profileManager.writeOutProfiles()
+            } catch (t: Throwable) {
+                logger.error("Error writing profiles", t)
+                throw t
+            }
+
             val response = WriteProfilesResponse(profilesWritten = result.profilesWritten, profilePaths = result.profilePaths)
             ctx.json(response)
         }

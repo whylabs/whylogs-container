@@ -1,11 +1,11 @@
 package ai.whylabs.services.whylogs
 
-import ai.whylabs.services.whylogs.core.IEnvVars
 import ai.whylabs.services.whylogs.core.LogRequest
 import ai.whylabs.services.whylogs.core.MultiLog
-import ai.whylabs.services.whylogs.core.ProfileWritePeriod
-import ai.whylabs.services.whylogs.core.WriteLayer
-import ai.whylabs.services.whylogs.core.WriterTypes
+import ai.whylabs.services.whylogs.core.config.IEnvVars
+import ai.whylabs.services.whylogs.core.config.ProfileWritePeriod
+import ai.whylabs.services.whylogs.core.config.WriteLayer
+import ai.whylabs.services.whylogs.core.config.WriterTypes
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions
@@ -205,8 +205,11 @@ class TestEnvVars : IEnvVars {
     override val writer = WriterTypes.DEBUG_FILE_SYSTEM
     override val whylabsApiEndpoint = "n/a"
     override val orgId = "nothing"
+    override val ignoredKeys: Set<String> = setOf()
+    override val fileSystemWriterRoot = "whylogs-profiles"
     override val emptyProfilesDatasetIds = emptyList<String>()
     override val requestQueueingMode = WriteLayer.SQLITE
+    override val requestQueueingEnabled = true
     override val profileStorageMode = WriteLayer.SQLITE
     override val requestQueueProcessingIncrement = PopSize.N(10)
     override val whylabsApiKey = "xxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -217,4 +220,5 @@ class TestEnvVars : IEnvVars {
     override val s3Bucket = "none"
     override val port = 8085
     override val debug = true
+    override val kafkaConfig = null
 }

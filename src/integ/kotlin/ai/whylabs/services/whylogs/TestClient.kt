@@ -1,8 +1,8 @@
 package ai.whylabs.services.whylogs
 
-import ai.whylabs.services.whylogs.core.IEnvVars
 import ai.whylabs.services.whylogs.core.LogRequest
 import ai.whylabs.services.whylogs.core.WriteProfilesResponse
+import ai.whylabs.services.whylogs.core.config.IEnvVars
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.whylogs.core.DatasetProfile

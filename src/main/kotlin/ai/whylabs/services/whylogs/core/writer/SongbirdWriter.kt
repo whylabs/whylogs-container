@@ -12,7 +12,9 @@ import org.slf4j.LoggerFactory
 import java.net.HttpURLConnection
 import java.net.URL
 
-class WhyLabsWriter(envVars: IEnvVars = EnvVars.instance) : Writer {
+private const val writeType = "whylabs"
+
+class SongbirdWriter(envVars: IEnvVars = EnvVars.instance) : Writer {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val songbirdClientManager = SongbirdClientManager(envVars)
 
@@ -36,7 +38,7 @@ class WhyLabsWriter(envVars: IEnvVars = EnvVars.instance) : Writer {
 
             val tagString = getTagString(tags)
             logger.info("Pushed ${profile.tags[DatasetIdTag]}/$tagString/${profile.dataTimestamp} data successfully")
-            return WriteResult(type = "whylabs")
+            return WriteResult(type = writeType)
         } catch (e: ApiException) {
             logger.error("Bad request when sending data to WhyLabs. Code: ${e.code}. Message: ${e.responseBody}", e)
             throw e

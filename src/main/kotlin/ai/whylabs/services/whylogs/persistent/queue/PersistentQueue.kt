@@ -60,7 +60,7 @@ class PersistentQueue<T>(options: QueueOptions<T>) {
                 // you'll see lots of small transactions as requests trickle in. If its large then you'll see fewer
                 // transactions but they might take a big longer to totally finish. 100ms was a sweet spot for tops in
                 // some local testing with small payloads but this really depends on hardware.
-                delay(100)
+                delay(50)
                 pop(incrementSize) {
                     empty = it.isEmpty()
                     block(it)
