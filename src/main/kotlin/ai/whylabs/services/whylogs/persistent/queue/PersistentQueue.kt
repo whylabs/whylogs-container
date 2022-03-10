@@ -1,70 +1,71 @@
 package ai.whylabs.services.whylogs.persistent.queue
 
+import ai.whylabs.services.whylogs.util.RetryOptions
+import ai.whylabs.services.whylogs.util.defaultRetryPolicy
+import com.github.michaelbull.retry.policy.RetryPolicy
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
-import java.util.concurrent.CancellationException
-import java.util.concurrent.Executors
 
-class PersistentQueue<T>(writer: QueueWriteLayer<T>) : AutoCloseable {
+class PersistentQueue<T>(options: QueueOptions<T>) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val scope = CoroutineScope(Executors.newFixedThreadPool(3).asCoroutineDispatcher())
-    private val act = queueMessageHandler(QueueOptions(scope, writer))
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private val act = scope.queueMessageHandler(options)
 
     suspend fun push(items: List<T>) {
-        logger.debug("Pushing")
-        val done = CompletableDeferred<Unit>()
-        logger.debug("Sending message and waiting for done signal")
-        act.send(PersistentQueueMessage.PushMessage(done, items))
-        done.await()
-        logger.debug("Done pushing")
-    }
-
-    suspend fun pop(count: PopSize, block: suspend (List<T>) -> Unit) {
-        val done = CompletableDeferred<Unit>()
-        val processingDone = CompletableDeferred<Unit>()
-        val onItems = CompletableDeferred<List<T>>()
-
-        logger.debug("Popping")
-        act.send(PersistentQueueMessage.PopMessage(done, onItems, processingDone, count))
-
-        logger.debug("Waiting for item lookup.")
-        try {
-            val items = onItems.await()
-            try {
-                logger.debug("Calling the processing block")
-                block(items)
-                processingDone.complete(Unit)
-            } catch (t: Throwable) {
-                logger.error("Error in processing block", t)
-                processingDone.completeExceptionally(t)
-            }
-            logger.debug("Done popping.")
-        } catch (e: CancellationException) {
-            // If there is nothing to process then we get a cancel.
-            logger.debug("Nothing to process.")
-        } finally {
-            logger.debug("Waiting for the final done signal")
+        withContext(scope.coroutineContext) {
+            logger.debug("Pushing")
+            val done = CompletableDeferred<Unit>()
+            logger.debug("Sending message and waiting for done signal")
+            act.send(PersistentQueueMessage.PushMessage(done, items))
             done.await()
         }
     }
 
-    suspend fun popUntilEmpty(incrementSize: PopSize, block: suspend (List<T>) -> Unit) {
-        var empty = false
-        while (!empty) {
-            // TODO make this configurable
-            delay(1000)
-            pop(incrementSize) {
-                empty = it.isEmpty()
-                block(it)
+    suspend fun pop(count: PopSize, block: suspend (List<T>) -> Unit) {
+        withContext(scope.coroutineContext) {
+            val done = CompletableDeferred<Unit>()
+            val processingDone = CompletableDeferred<Unit>()
+            val onItems = CompletableDeferred<List<T>>()
+
+            logger.debug("Popping")
+            act.send(PersistentQueueMessage.PopMessage(done, onItems, processingDone, count))
+
+            logger.debug("Waiting for item lookup.")
+            try {
+                val items = onItems.await()
+                logger.debug("Calling the processing block")
+                block(items)
+                processingDone.complete(Unit)
+                logger.debug("Done popping.")
+            } catch (t: Throwable) {
+                logger.error("Error in processing block", t)
+                processingDone.completeExceptionally(t)
+            } finally {
+                logger.debug("Waiting for the final done signal")
+                done.await()
             }
         }
     }
 
-    override fun close() {
-        act.close()
+    suspend fun popUntilEmpty(incrementSize: PopSize, block: suspend (List<T>) -> Unit) {
+        withContext(scope.coroutineContext) {
+            var empty = false
+            while (!empty) {
+                // TODO make this configurable. This is how fast the queue is drained. If this number is low/0 then
+                // you'll see lots of small transactions as requests trickle in. If its large then you'll see fewer
+                // transactions but they might take a big longer to totally finish. 100ms was a sweet spot for tops in
+                // some local testing with small payloads but this really depends on hardware.
+                delay(100)
+                pop(incrementSize) {
+                    empty = it.isEmpty()
+                    block(it)
+                }
+            }
+        }
     }
 }
 
@@ -74,6 +75,6 @@ sealed class PopSize {
 }
 
 data class QueueOptions<T>(
-    internal val scope: CoroutineScope,
-    internal val queueWriteLayer: QueueWriteLayer<T>,
-)
+    val queueWriteLayer: QueueWriteLayer<T>,
+    override val retryPolicy: RetryPolicy<Throwable>? = defaultRetryPolicy
+) : RetryOptions

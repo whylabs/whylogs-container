@@ -92,13 +92,16 @@ private fun requireIf(condition: Boolean, envName: String, fallback: String = ""
 // The right number for this entirely depends on the expected size of the requests and the memory on the machine.
 private fun parseQueueIncrement(): PopSize {
     val key = "REQUEST_QUEUE_PROCESSING_INCREMENT"
-    val increment = System.getenv(key) ?: "ALL"
-    if (increment == "ALL") {
+    // By default, set it to something large but finite. We have no idea how large the payloads
+    // are going to be and if this number is too big then we'll attempt to put all of that into
+    // memory at once, which could be bad.
+    val requestProcessingIncrement = System.getenv(key) ?: "100"
+    if (requestProcessingIncrement == "ALL") {
         return PopSize.All
     }
 
     try {
-        return PopSize.N(increment.toInt())
+        return PopSize.N(requestProcessingIncrement.toInt())
     } catch (t: Throwable) {
         throw IllegalStateException("Couldn't parse env key $key", t)
     }

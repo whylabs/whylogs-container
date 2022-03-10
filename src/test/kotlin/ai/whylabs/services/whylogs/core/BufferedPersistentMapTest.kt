@@ -3,10 +3,12 @@ package ai.whylabs.services.whylogs.core
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMap
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMapConfig
 import ai.whylabs.services.whylogs.persistent.Serializer
+import ai.whylabs.services.whylogs.persistent.map.MapMessageHandlerOptions
 import ai.whylabs.services.whylogs.persistent.map.PersistentMap
 import ai.whylabs.services.whylogs.persistent.map.SqliteMapWriteLayer
 import ai.whylabs.services.whylogs.persistent.queue.PersistentQueue
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
+import ai.whylabs.services.whylogs.persistent.queue.QueueOptions
 import ai.whylabs.services.whylogs.persistent.queue.SqliteQueueWriteLayer
 import ai.whylabs.services.whylogs.persistent.serializer
 import kotlinx.coroutines.CompletableDeferred
@@ -26,20 +28,24 @@ class BufferedPersistentMapTest {
     @BeforeEach
     fun init() = runBlocking {
         queue = PersistentQueue(
-            SqliteQueueWriteLayer(
-                "test-queue",
-                StringSerializer()
+            QueueOptions(
+                SqliteQueueWriteLayer(
+                    "test-queue",
+                    StringSerializer()
+                )
             )
         )
         config = QueueBufferedPersistentMapConfig(
             queue = queue,
             map = PersistentMap(
-                SqliteMapWriteLayer(
-                    "test-map",
-                    StringSerializer(),
-                    IntSerializer()
+                MapMessageHandlerOptions(
+                    SqliteMapWriteLayer(
+                        "test-map",
+                        StringSerializer(),
+                        IntSerializer()
+                    )
                 ).apply {
-                    this.reset(emptyMap())
+                    writeLayer.reset(emptyMap())
                 }
             ),
             defaultValue = { 0 },
@@ -78,7 +84,6 @@ class BufferedPersistentMapTest {
         queue.pop(PopSize.All) {
             throw RuntimeException("This shouldn't be called because queuContent should be empty")
         }
-        bufferedMap.close()
     }
 
     @Test

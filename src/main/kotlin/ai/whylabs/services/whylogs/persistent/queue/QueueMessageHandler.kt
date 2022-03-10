@@ -1,19 +1,19 @@
 package ai.whylabs.services.whylogs.persistent.queue
 
+import ai.whylabs.services.whylogs.util.LoggingUtil.getLoggerForFile
+import ai.whylabs.services.whylogs.util.repeatUntilCancelled
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ObsoleteCoroutinesApi
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withTimeout
-import org.slf4j.LoggerFactory
-import java.util.concurrent.Executors
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.math.min
 
-private val logger = LoggerFactory.getLogger("queueMessageHandler")
+private val logger = getLoggerForFile()
 
 internal sealed class PersistentQueueMessage<T>(val done: CompletableDeferred<Unit>) {
 
@@ -28,32 +28,18 @@ internal sealed class PersistentQueueMessage<T>(val done: CompletableDeferred<Un
 
 private typealias MessageHandler <T> = suspend (message: PersistentQueueMessage<T>) -> Unit
 
-private fun <T> messageHandler(options: QueueOptions<T>): MessageHandler<T> {
-    return if (options.queueWriteLayer.concurrentReadWrites()) {
-        concurrentMessageHandler(options)
-    } else {
-        serialMessageHandler(options)
-    }
+private fun <T> CoroutineScope.messageHandler(options: QueueOptions<T>): MessageHandler<T> {
+    return if (options.queueWriteLayer.concurrentReadWrites) concurrentMessageHandler(options) else serialMessageHandler(options)
 }
 
-private fun <T> concurrentMessageHandler(options: QueueOptions<T>): MessageHandler<T> {
-    val pushActor = subActor<PersistentQueueMessage.PushMessage<T>> { msg ->
-        try {
-            push(options, msg)
-        } catch (t: Throwable) {
-            logger.error("Error pushing items", t)
-            msg.done.completeExceptionally(t)
-        }
-    }
-
-    val popActor = subActor<PersistentQueueMessage.PopMessage<T>> { msg ->
-        try {
-            pop(options, msg)
-        } catch (t: Throwable) {
-            logger.error("Error popping items", t)
-            msg.done.completeExceptionally(t)
-        }
-    }
+private fun <T> CoroutineScope.concurrentMessageHandler(options: QueueOptions<T>): MessageHandler<T> {
+    // Dedicating a single thread to each of these paths is an extra layer of concurrency guarantees.
+    // If they shared a common pool then coroutines might have both of them running on the same thread
+    // across some period of time, which would be bad if they both used sqlite connections, for example,
+    // which are supposed to be unique to a each thread. They still inherit the scope of the parent coroutine
+    // but they run on the context's thread, so they share cancellation with the parent.
+    val pushActor = subActor<PersistentQueueMessage.PushMessage<T>>(newSingleThreadContext("push-actor")) { push(options, it) }
+    val popActor = subActor<PersistentQueueMessage.PopMessage<T>>(newSingleThreadContext("pop-actor")) { pop(options, it) }
 
     return { msg ->
         when (msg) {
@@ -72,36 +58,39 @@ private fun <T> serialMessageHandler(options: QueueOptions<T>): MessageHandler<T
     }
 }
 
-@ObsoleteCoroutinesApi
-internal fun <T> queueMessageHandler(options: QueueOptions<T>) =
-    options.scope.actor<PersistentQueueMessage<T>>(capacity = Channel.UNLIMITED) {
-        val handler = messageHandler(options)
-        for (msg in channel) {
-            logger.debug("Handling message ${msg.javaClass}")
-            try {
-                handler(msg)
-            } catch (t: Throwable) {
-                logger.error("Error popping items", t)
-                msg.done.completeExceptionally(t)
+internal fun <T> CoroutineScope.queueMessageHandler(options: QueueOptions<T>) = actor<PersistentQueueMessage<T>>(capacity = 1000) {
+    consumeUntilCancelled(channel, messageHandler(options))
+}
+
+private fun <M : PersistentQueueMessage<*>> CoroutineScope.subActor(context: CoroutineContext = EmptyCoroutineContext, handler: suspend (M) -> Unit) =
+    actor<M>(capacity = 1000, context = context) {
+        consumeUntilCancelled(channel, handler)
+    }
+
+private suspend fun <M : PersistentQueueMessage<*>> consumeUntilCancelled(channel: Channel<M>, handler: suspend (M) -> Unit) {
+    coroutineScope {
+        repeatUntilCancelled(logger) {
+            for (msg in channel) {
+                try {
+                    handler(msg) // This thing has to do the error handling
+                } catch (t: Throwable) {
+                    logger.error("Error handling message $msg in channel.", t)
+                    msg.done.completeExceptionally(t)
+                }
             }
         }
     }
-
-private fun <M : PersistentQueueMessage<*>> subActor(
-    handler: suspend (M) -> Unit
-): SendChannel<M> {
-    val scope = CoroutineScope(Executors.newSingleThreadExecutor().asCoroutineDispatcher())
-    return scope.actor(capacity = Channel.UNLIMITED) {
-        for (msg in channel) {
-            handler(msg)
-        }
-    }
+    logger.error("actor existed unexpectedly because the channel closed or it was cancelled, which shouldn't be possible.")
 }
 
 private suspend fun <T> push(options: QueueOptions<T>, message: PersistentQueueMessage.PushMessage<T>) {
-    withTimeout(3000) {
+    withTimeout(10_000) {
         logger.debug("Writing message")
-        options.queueWriteLayer.push(message.value)
+
+        options.retryIfEnabled {
+            options.queueWriteLayer.push(message.value)
+        }
+
         message.done.complete(Unit)
         logger.debug("Done writing message")
     }
@@ -110,19 +99,21 @@ private suspend fun <T> push(options: QueueOptions<T>, message: PersistentQueueM
 private suspend fun <T> pop(options: QueueOptions<T>, message: PersistentQueueMessage.PopMessage<T>) {
     withTimeout(30_000) {
         val popSize = when (message.n) {
-            is PopSize.All -> options.queueWriteLayer.size()
+            is PopSize.All -> options.retryIfEnabled { options.queueWriteLayer.size() }
             is PopSize.N -> min(message.n.n, options.queueWriteLayer.size())
         }
 
         if (popSize == 0) {
-            logger.debug("Nothing in the queue to pop")
-            message.items.cancel("No items to process")
+            logger.debug("Nothing in the queue to pop.")
+            message.items.complete(emptyList())
             message.done.complete(Unit)
             return@withTimeout
         }
 
         logger.debug("Peeking $popSize messages")
-        val items = options.queueWriteLayer.peek(popSize)
+        val items = options.retryIfEnabled {
+            options.queueWriteLayer.peek(popSize)
+        }
         message.items.complete(items)
 
         logger.debug("Waiting for items to be processed by the consumer")
@@ -136,7 +127,7 @@ private suspend fun <T> pop(options: QueueOptions<T>, message: PersistentQueueMe
 
         // means that the items were handled and they can be discarded now
         logger.debug("Discarding processed items")
-        options.queueWriteLayer.pop(popSize)
+        options.retryIfEnabled { options.queueWriteLayer.pop(popSize) }
 
         // Done with everything
         logger.debug("Done with everything")

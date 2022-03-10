@@ -1,8 +1,11 @@
 package ai.whylabs.services.whylogs.persistent.map
 
+import ai.whylabs.services.whylogs.util.RetryOptions
+import ai.whylabs.services.whylogs.util.defaultRetryPolicy
+import ai.whylabs.services.whylogs.util.repeatUntilCancelled
+import com.github.michaelbull.retry.policy.RetryPolicy
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.actor
 import kotlinx.coroutines.withTimeout
 import org.slf4j.LoggerFactory
@@ -28,10 +31,10 @@ internal sealed class PersistentMapMessage<K, V>(val done: CompletableDeferred<V
     ) : PersistentMapMessage<K, V>(done)
 }
 
-internal data class MapMessageHandlerOptions<K, V>(
-    internal val scope: CoroutineScope,
-    internal val writeLayer: MapWriteLayer<K, V>,
-)
+data class MapMessageHandlerOptions<K, V>(
+    val writeLayer: MapWriteLayer<K, V>,
+    override val retryPolicy: RetryPolicy<Throwable>? = defaultRetryPolicy
+) : RetryOptions
 
 /**
  * Utility to handle concurrency concerns in the [PersistentMap]. The [PersistentMap] mostly exists
@@ -42,19 +45,21 @@ internal data class MapMessageHandlerOptions<K, V>(
  * For the [PersistentMap], there is a single actor that queues all incoming messages so everything is
  * handled sequentially.
  */
-internal fun <K, V> mapMessageHandler(options: MapMessageHandlerOptions<K, V>) =
-    options.scope.actor<PersistentMapMessage<K, V>>(capacity = Channel.UNLIMITED) {
-        for (msg in channel) {
-            logger.debug("Handling message ${msg.javaClass}")
-            try {
-                when (msg) {
-                    is PersistentMapMessage.GetMessage<K, V> -> get(options, msg)
-                    is PersistentMapMessage.SetMessage<K, V> -> set(options, msg)
-                    is PersistentMapMessage.ResetMessage<K, V> -> reset(options, msg)
+internal fun <K, V> CoroutineScope.mapMessageHandler(options: MapMessageHandlerOptions<K, V>) =
+    actor<PersistentMapMessage<K, V>>(capacity = 1000) {
+        repeatUntilCancelled(logger) {
+            for (msg in channel) {
+                logger.debug("Handling message ${msg.javaClass}")
+                try {
+                    when (msg) {
+                        is PersistentMapMessage.GetMessage<K, V> -> get(options, msg)
+                        is PersistentMapMessage.SetMessage<K, V> -> set(options, msg)
+                        is PersistentMapMessage.ResetMessage<K, V> -> reset(options, msg)
+                    }
+                } catch (t: Throwable) {
+                    logger.error("Error handling message ${msg.javaClass}", t)
+                    msg.done.completeExceptionally(t)
                 }
-            } catch (t: Throwable) {
-                logger.error("Error handling message ${msg.javaClass}", t)
-                msg.done.completeExceptionally(t)
             }
         }
     }
@@ -65,7 +70,11 @@ private suspend fun <K, V> get(
 ) {
     withTimeout(defaultTimeoutMs) {
         logger.debug("Getting item $message.key")
-        val item = options.writeLayer.get(message.key)
+
+        val item = options.retryIfEnabled {
+            options.writeLayer.get(message.key)
+        }
+
         message.done.complete(item)
         logger.debug("Done getting item")
     }
@@ -77,7 +86,9 @@ private suspend fun <K, V> set(
 ) {
     withTimeout(defaultTimeoutMs) {
         logger.debug("Looking up current item's value")
-        val currentItem = options.writeLayer.get(message.key)
+        val currentItem = options.retryIfEnabled {
+            options.writeLayer.get(message.key)
+        }
 
         logger.debug("Relaying the current state of the item")
         message.currentItem.complete(currentItem)
@@ -87,10 +98,14 @@ private suspend fun <K, V> set(
 
         if (newItem == null) {
             logger.debug("Deleting the item.")
-            options.writeLayer.remove(message.key)
+            options.retryIfEnabled {
+                options.writeLayer.remove(message.key)
+            }
         } else {
             logger.debug("Updating the item.")
-            options.writeLayer.set(message.key, newItem)
+            options.retryIfEnabled {
+                options.writeLayer.set(message.key, newItem)
+            }
         }
 
         message.done.complete(null)
@@ -104,7 +119,10 @@ private suspend fun <K, V> reset(
 ) {
     withTimeout(defaultTimeoutMs) {
         logger.debug("Reading everything from the map")
-        val everything = options.writeLayer.getAll()
+
+        val everything = options.retryIfEnabled {
+            options.writeLayer.getAll()
+        }
 
         logger.debug("Returning everything to the consumer")
         message.everything.complete(everything)
@@ -122,7 +140,9 @@ private suspend fun <K, V> reset(
 
         // Reset the value to this map
         logger.debug("Writing the updated value")
-        options.writeLayer.reset(updatedValues)
+        options.retryIfEnabled {
+            options.writeLayer.reset(updatedValues)
+        }
 
         message.done.complete(null)
         logger.debug("Done resetting item")
