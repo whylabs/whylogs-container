@@ -107,8 +107,6 @@ class WhyLogsProfileManagerTest {
         manager.config.queue.pop(PopSize.All) {
             throw RuntimeException("This shouldn't be called because queueContent should be empty")
         }
-
-        bufferedMap.close()
     }
 
     @Test
@@ -190,8 +188,6 @@ class WhyLogsProfileManagerTest {
         manager.config.queue.pop(PopSize.All) {
             throw RuntimeException("This shouldn't be called because queueContent should be empty")
         }
-
-        bufferedMap.close()
     }
 }
 

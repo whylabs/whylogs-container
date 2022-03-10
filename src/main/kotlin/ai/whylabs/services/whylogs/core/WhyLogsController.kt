@@ -38,7 +38,9 @@ class WhyLogsController(
     }
 
     fun after(ctx: Context) {
-        profileManager.mergePending()
+        runBlocking {
+            profileManager.mergePending()
+        }
     }
 
     @OpenApi(

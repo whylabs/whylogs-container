@@ -1,7 +1,6 @@
 package ai.whylabs.services.whylogs.persistent.map
 
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -13,13 +12,8 @@ class PersistentMapTests {
 
     @BeforeEach
     fun init() {
-        map = PersistentMap(writeLayer)
+        map = PersistentMap(MapMessageHandlerOptions(writeLayer))
         runBlocking { writeLayer.clear() }
-    }
-
-    @AfterEach
-    fun after() {
-        map.close()
     }
 
     @Test

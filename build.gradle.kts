@@ -70,4 +70,5 @@ dependencies {
 
 application {
     mainClassName = "ai.whylabs.services.whylogs.MainKt"
+    applicationDefaultJvmArgs = listOf("-Dkotlinx.coroutines.debug")
 }

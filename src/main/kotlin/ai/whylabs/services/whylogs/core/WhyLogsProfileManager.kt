@@ -3,10 +3,12 @@ package ai.whylabs.services.whylogs.core
 import ai.whylabs.service.invoker.ApiException
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMap
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMapConfig
+import ai.whylabs.services.whylogs.persistent.map.MapMessageHandlerOptions
 import ai.whylabs.services.whylogs.persistent.map.PersistentMap
 import ai.whylabs.services.whylogs.persistent.map.SqliteMapWriteLayer
 import ai.whylabs.services.whylogs.persistent.queue.InMemoryQueueWriteLayer
 import ai.whylabs.services.whylogs.persistent.queue.PersistentQueue
+import ai.whylabs.services.whylogs.persistent.queue.QueueOptions
 import ai.whylabs.services.whylogs.persistent.queue.SqliteQueueWriteLayer
 import com.whylogs.core.DatasetProfile
 import kotlinx.coroutines.runBlocking
@@ -34,22 +36,26 @@ class WhyLogsProfileManager(
     private val chronoUnit: ChronoUnit = ChronoUnit.valueOf(period ?: ChronoUnit.HOURS.name)
 
     private val queue = PersistentQueue(
-        when (envVars.requestQueueingMode) {
-            RequestQueueingMode.IN_MEMORY -> {
-                logger.info("Using InMemoryWriteLayer for request queue.")
-                InMemoryQueueWriteLayer()
+        QueueOptions(
+            queueWriteLayer = when (envVars.requestQueueingMode) {
+                RequestQueueingMode.IN_MEMORY -> {
+                    logger.info("Using InMemoryWriteLayer for request queue.")
+                    InMemoryQueueWriteLayer()
+                }
+                RequestQueueingMode.SQLITE -> {
+                    logger.info("Using SqliteQueueWriteLayer for request queue.")
+                    SqliteQueueWriteLayer("pending-requests", LogRequestSerializer())
+                }
             }
-            RequestQueueingMode.SQLITE -> {
-                logger.info("Using SqliteQueueWriteLayer for request queue.")
-                SqliteQueueWriteLayer("pending-requests", LogRequestSerializer())
-            }
-        }
+        )
     )
     private val map = PersistentMap(
-        SqliteMapWriteLayer(
-            "dataset-profiles",
-            ProfileKeySerializer(),
-            ProfileEntrySerializer()
+        MapMessageHandlerOptions(
+            SqliteMapWriteLayer(
+                "dataset-profiles",
+                ProfileKeySerializer(),
+                ProfileEntrySerializer()
+            )
         )
     )
 
@@ -129,7 +135,7 @@ class WhyLogsProfileManager(
         )
     )
 
-    fun mergePending() = runBlocking {
+    suspend fun mergePending() {
         profiles.mergeBuffered(envVars.requestQueueProcessingIncrement)
     }
 
@@ -142,7 +148,7 @@ class WhyLogsProfileManager(
     }
 
     /**
-     * Create emtpy profiles for each of the dataset ids that we're configured to. This is what
+     * Create empty profiles for each of the dataset ids that we're configured to. This is what
      * keeps the container sending profiles in the absence of receiving actual data, which is a useful
      * property to have to know if things are going wrong.
      */

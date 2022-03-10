@@ -3,16 +3,15 @@ package ai.whylabs.services.whylogs.persistent
 import ai.whylabs.services.whylogs.persistent.map.PersistentMap
 import ai.whylabs.services.whylogs.persistent.queue.PersistentQueue
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
+import ai.whylabs.services.whylogs.util.repeatUntilCancelled
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.actor
-import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
-import java.util.concurrent.Executors
 
-interface BufferedPersistentMap<BufferedItems, MapKeyType, MapValueType> : AutoCloseable {
+interface BufferedPersistentMap<BufferedItems, MapKeyType, MapValueType> {
     val map: PersistentMap<MapKeyType, MapValueType>
     suspend fun buffer(item: BufferedItems)
     suspend fun mergeBuffered(increment: PopSize, done: CompletableDeferred<Unit>? = null)
@@ -55,7 +54,7 @@ data class QueueBufferedPersistentMapConfig<BufferedItems, MapKeyType, MapValueT
      */
     val delay: Long = 1_000,
 
-    val scope: CoroutineScope = CoroutineScope(Executors.newFixedThreadPool(2).asCoroutineDispatcher())
+    val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 )
 
 private class MergeChannelMessage(val increment: PopSize, val done: CompletableDeferred<Unit>? = null)
@@ -71,13 +70,13 @@ class QueueBufferedPersistentMap<BufferItems, MayKeyType, MapValueType>(
     override val map = config.map
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    private val mergeChannel = config.scope.actor<MergeChannelMessage>(capacity = Channel.CONFLATED) {
-        for (msg in channel) {
-            // Only process once a second. We always process everything that's enqueued. Doing it too often
-            // results in potentially needless IO since this entire process is asynchronous anyway.
-            delay(config.delay)
-            handleMergeMessage(msg.increment)
-            msg.done?.complete(Unit)
+    // This channel will doing a lot of in memory group by so we'll run it on the default dispatcher instead of the IO one.
+    private val mergeChannel = CoroutineScope(Dispatchers.Default).actor<MergeChannelMessage>(capacity = Channel.RENDEZVOUS) {
+        repeatUntilCancelled(logger) {
+            for (msg in channel) {
+                handleMergeMessage(msg.increment)
+                msg.done?.complete(Unit)
+            }
         }
     }
 
@@ -97,21 +96,23 @@ class QueueBufferedPersistentMap<BufferItems, MayKeyType, MapValueType>(
             }
         }
 
-        if (popSize == PopSize.All) {
-            config.queue.pop(popSize, block)
-        } else {
-            config.queue.popUntilEmpty(popSize, block)
+        when (popSize) {
+            is PopSize.All -> {
+                config.queue.pop(popSize, block)
+            }
+            is PopSize.N -> {
+                config.queue.popUntilEmpty(popSize, block)
+            }
         }
     }
 
     override suspend fun buffer(item: BufferItems) = config.queue.push(listOf(item))
 
     override suspend fun mergeBuffered(increment: PopSize, done: CompletableDeferred<Unit>?) {
-        mergeChannel.send(MergeChannelMessage(increment, done))
-    }
-
-    override fun close() {
-        config.queue.close()
-        config.map.close()
+        // We don't care about delivering messages if there is already one being handled because the logic
+        // of popping items inherently pops until there are none left, triggering this while one is in progress
+        // wouldn't matter so we use offer which is just a no-op if the buffer is full, which it will be if
+        // anything is happening since the capacity is set to Channel.RENDEZVOUS
+        mergeChannel.offer(MergeChannelMessage(increment, done))
     }
 }

@@ -60,7 +60,7 @@ class SqliteQueueWriteLayer<T>(private val name: String, private val serializer:
     override suspend fun pop(n: Int) {
         // TODO this query is nicer and probably performs better but it requires sqlite to be built
         // with  SQLITE_ENABLE_UPDATE_DELETE_LIMIT flag.
-//        val query = "DELETE FROM items ORDER BY ROWID ASC LIMIT $n;"
+        // val query = "DELETE FROM items ORDER BY ROWID ASC LIMIT $n;"
         val query = "DELETE FROM items WHERE ROWID IN ( SELECT ROWID FROM items ORDER BY ROWID ASC LIMIT $n);"
         db {
             prepareStatement(query).executeUpdate()
@@ -85,5 +85,5 @@ class SqliteQueueWriteLayer<T>(private val name: String, private val serializer:
         return size ?: throw IllegalStateException("Couldn't get the size")
     }
 
-    override fun concurrentReadWrites() = true
+    override val concurrentReadWrites = true
 }
