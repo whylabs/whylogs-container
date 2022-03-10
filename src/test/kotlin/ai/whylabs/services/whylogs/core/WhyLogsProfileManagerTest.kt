@@ -1,26 +1,31 @@
 package ai.whylabs.services.whylogs.core
 
+import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
 import com.whylogs.core.DatasetProfile
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 private const val sessionId = "123"
 private const val orgId = "org-1"
 
-class WhyLabsEnvVars : IEnvVars {
+private class WhyLabsEnvVars : IEnvVars {
     override val writer = WriterTypes.WHYLABS
     override val whylabsApiEndpoint = "none"
     override val orgId = "org-1"
     override val emptyProfilesDatasetIds = emptyList<String>()
-    override val requestQueueingMode = RequestQueueingMode.SQLITE
+    override val requestQueueingMode = WriteLayer.SQLITE
+    override val profileStorageMode = WriteLayer.SQLITE
     override val requestQueueProcessingIncrement = PopSize.All
     override val whylabsApiKey = "key"
-    override val period = "HOURS"
+    override val whylogsPeriod = ChronoUnit.HOURS
+    override val profileWritePeriod = ProfileWritePeriod.HOURS
     override val expectedApiKey = "password"
     override val s3Prefix = ""
     override val s3Bucket = "test-bucket"
@@ -35,7 +40,6 @@ class WhyLogsProfileManagerTest {
     @BeforeEach
     fun init() = runBlocking {
         manager = WhyLogsProfileManager(
-            period = null,
             currentTime = Instant.ofEpochMilli(1),
             writer = FakeWriter(),
             orgId = orgId,
@@ -43,7 +47,10 @@ class WhyLogsProfileManagerTest {
             writeOnStop = false,
             envVars = WhyLabsEnvVars()
         )
+    }
 
+    @AfterEach
+    fun after() = runBlocking {
         // Clear out any cached entries since this uses a real sqlite backend.
         manager.profiles.map.reset {
             emptyMap()
@@ -105,7 +112,7 @@ class WhyLogsProfileManagerTest {
 
         // Make sure its not in the queue anymore
         manager.config.queue.pop(PopSize.All) {
-            throw RuntimeException("This shouldn't be called because queueContent should be empty")
+            Assertions.assertEquals(0, it.size, "Should have nothing left to pop")
         }
     }
 
@@ -186,13 +193,14 @@ class WhyLogsProfileManagerTest {
 
         // Make sure its not in the queue anymore
         manager.config.queue.pop(PopSize.All) {
-            throw RuntimeException("This shouldn't be called because queueContent should be empty")
+            Assertions.assertEquals(0, it.size, "Should have nothing left to pop")
         }
     }
 }
 
 class FakeWriter : Writer {
-    override suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String) {
+    override suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String): String? {
+        return null
     }
 }
 

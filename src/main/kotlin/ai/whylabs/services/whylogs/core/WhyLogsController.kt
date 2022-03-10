@@ -11,6 +11,7 @@ import io.javalin.plugin.openapi.annotations.OpenApiContent
 import io.javalin.plugin.openapi.annotations.OpenApiParam
 import io.javalin.plugin.openapi.annotations.OpenApiRequestBody
 import io.javalin.plugin.openapi.annotations.OpenApiResponse
+import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
@@ -21,9 +22,8 @@ const val DatasetIdTag = "datasetId"
 const val OrgIdTag = "orgId"
 
 class WhyLogsController(
-    private val envVars: EnvVars = EnvVars(),
-    period: String = envVars.period,
-    private val profileManager: WhyLogsProfileManager = WhyLogsProfileManager(period = period),
+    private val envVars: IEnvVars = EnvVars(),
+    private val profileManager: WhyLogsProfileManager = WhyLogsProfileManager(envVars = envVars),
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -61,6 +61,7 @@ Example:
 ```
 {
   "datasetId": "demo-model",
+  "timestamp": 1648162494947,
   "tags": {
     "tagKey": "tagValue"
   },
@@ -89,6 +90,7 @@ Here is an example from the output above
 ```json
 {
   "datasetId": "demo-model",
+  "timestamp": 1648162494947,
   "tags": {
     "tag1": "value1"
   },
@@ -154,14 +156,42 @@ Here is an example from the output above
         }
     }
 
+    @OpenApi(
+        headers = [OpenApiParam(name = apiKeyHeader, required = true)],
+        method = HttpMethod.POST,
+        summary = "Force the container to write out the pending profiles via whatever method it's configured for.",
+        operationId = "writeProfiles",
+        tags = ["whylogs"],
+        responses = [
+            OpenApiResponse("200", content = [OpenApiContent(from = WriteProfilesResponse::class)]),
+            OpenApiResponse("500", description = "Something unexpected went wrong.")
+        ]
+    )
+    fun writeProfiles(ctx: Context) {
+        return runBlocking {
+            val result = profileManager.writeOutProfiles()
+            val response = WriteProfilesResponse(profilesWritten = result.profilesWritten, profilePaths = result.profilePaths)
+            ctx.json(response)
+        }
+    }
+
     private fun return400(ctx: Context, message: String) {
         ctx.res.status = 400
         ctx.result(message)
     }
 }
 
+@Schema(description = "Response for writing out profiles.")
+data class WriteProfilesResponse(
+    @Schema(description = "The amount of profiles that were written out.")
+    val profilesWritten: Int,
+    @Schema(description = "The paths of the profiles that were written if they exist. Some writers may not write profiles to anyplace that can be described as a path.")
+    val profilePaths: List<String>
+)
+
 data class LogRequest(
     val datasetId: String,
+    val timestamp: Long? = null,
     val tags: Map<String, String>?,
     val single: Map<String, Any>?,
     val multiple: MultiLog?,

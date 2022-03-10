@@ -19,5 +19,5 @@ class InMemoryQueueWriteLayer<T> : QueueWriteLayer<T> {
         return queue.size
     }
 
-    override val concurrentReadWrites = false
+    override val concurrentPushPop = false
 }
