@@ -46,7 +46,7 @@ data class MapMessageHandlerOptions<K, V>(
  * handled sequentially.
  */
 internal fun <K, V> CoroutineScope.mapMessageHandler(options: MapMessageHandlerOptions<K, V>) =
-    actor<PersistentMapMessage<K, V>>(capacity = 1000) {
+    actor<PersistentMapMessage<K, V>>(capacity = 100) {
         repeatUntilCancelled(logger) {
             for (msg in channel) {
                 logger.debug("Handling message ${msg.javaClass}")

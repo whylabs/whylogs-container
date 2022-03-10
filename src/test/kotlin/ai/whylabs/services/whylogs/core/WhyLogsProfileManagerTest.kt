@@ -1,5 +1,10 @@
 package ai.whylabs.services.whylogs.core
 
+import ai.whylabs.services.whylogs.core.config.IEnvVars
+import ai.whylabs.services.whylogs.core.config.ProfileWritePeriod
+import ai.whylabs.services.whylogs.core.config.WriteLayer
+import ai.whylabs.services.whylogs.core.config.WriterTypes
+import ai.whylabs.services.whylogs.core.writer.WriteResult
 import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
 import com.whylogs.core.DatasetProfile
@@ -19,8 +24,10 @@ private class WhyLabsEnvVars : IEnvVars {
     override val writer = WriterTypes.WHYLABS
     override val whylabsApiEndpoint = "none"
     override val orgId = "org-1"
+    override val ignoredKeys: Set<String> = setOf()
     override val emptyProfilesDatasetIds = emptyList<String>()
     override val requestQueueingMode = WriteLayer.SQLITE
+    override val requestQueueingEnabled = true
     override val profileStorageMode = WriteLayer.SQLITE
     override val requestQueueProcessingIncrement = PopSize.All
     override val whylabsApiKey = "key"
@@ -31,6 +38,8 @@ private class WhyLabsEnvVars : IEnvVars {
     override val s3Bucket = "test-bucket"
     override val port = 8080
     override val debug = false
+    override val kafkaConfig = null
+    override val fileSystemWriterRoot = "whylogs-profiles"
 }
 
 class WhyLogsProfileManagerTest {
@@ -64,8 +73,8 @@ class WhyLogsProfileManagerTest {
         val (_, request) = a
 
         // Add some stuff
-        bufferedMap.buffer(request)
-        bufferedMap.buffer(request)
+        bufferedMap.merge(request)
+        bufferedMap.merge(request)
 
         // Merge bufferedMap from the queue into the map
         CompletableDeferred<Unit>().apply {
@@ -91,8 +100,8 @@ class WhyLogsProfileManagerTest {
             mapOf()
         ).apply {
             // Update the profile like we expect it to be updated
-            merge(request.request)
-            merge(request.request)
+            merge(request.request, setOf())
+            merge(request.request, setOf())
         }
 
         val expectedValue = ProfileEntry(profile = profile, orgId = orgId, datasetId = "model-1")
@@ -126,17 +135,17 @@ class WhyLogsProfileManagerTest {
         val (expectedKeyC, requestC, profileC) = c
         val (expectedKeyD, requestD, profileD) = d
 
-        bufferedMap.buffer(requestA)
-        bufferedMap.buffer(requestA)
+        bufferedMap.merge(requestA)
+        bufferedMap.merge(requestA)
 
-        bufferedMap.buffer(requestB)
-        bufferedMap.buffer(requestB)
+        bufferedMap.merge(requestB)
+        bufferedMap.merge(requestB)
 
-        bufferedMap.buffer(requestC)
-        bufferedMap.buffer(requestC)
+        bufferedMap.merge(requestC)
+        bufferedMap.merge(requestC)
 
-        bufferedMap.buffer(requestD)
-        bufferedMap.buffer(requestD)
+        bufferedMap.merge(requestD)
+        bufferedMap.merge(requestD)
 
         // Merge from the queue into the map
         CompletableDeferred<Unit>().apply {
@@ -145,18 +154,18 @@ class WhyLogsProfileManagerTest {
         }
 
         // Update the profiles like we expect them to be updated
-        profileA.merge(requestA.request)
-        profileA.merge(requestA.request)
-        profileA.merge(requestA.request)
+        profileA.merge(requestA.request, setOf())
+        profileA.merge(requestA.request, setOf())
+        profileA.merge(requestA.request, setOf())
 
-        profileB.merge(requestB.request)
-        profileB.merge(requestB.request)
+        profileB.merge(requestB.request, setOf())
+        profileB.merge(requestB.request, setOf())
 
-        profileC.merge(requestC.request)
-        profileC.merge(requestC.request)
+        profileC.merge(requestC.request, setOf())
+        profileC.merge(requestC.request, setOf())
 
-        profileD.merge(requestD.request)
-        profileD.merge(requestD.request)
+        profileD.merge(requestD.request, setOf())
+        profileD.merge(requestD.request, setOf())
 
         // Create expected values
         val expectedValueA = ProfileEntry(profile = profileA, orgId = orgId, datasetId = "model-1")
@@ -199,8 +208,8 @@ class WhyLogsProfileManagerTest {
 }
 
 class FakeWriter : Writer {
-    override suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String): String? {
-        return null
+    override suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String): WriteResult {
+        return WriteResult(type = "FakeResult")
     }
 }
 

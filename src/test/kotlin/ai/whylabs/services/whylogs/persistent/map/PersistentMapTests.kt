@@ -1,19 +1,26 @@
 package ai.whylabs.services.whylogs.persistent.map
 
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class PersistentMapTests {
 
-    private val writeLayer = SqliteMapWriteLayer("test", StringSerializer(), StringSerializer())
+    private var writeLayer: SqliteMapWriteLayer<String, String>? = null
     private lateinit var map: PersistentMap<String, String>
 
     @BeforeEach
     fun init() {
-        map = PersistentMap(MapMessageHandlerOptions(writeLayer))
-        runBlocking { writeLayer.clear() }
+        writeLayer = SqliteMapWriteLayer("test", StringSerializer(), StringSerializer())
+        map = PersistentMap(MapMessageHandlerOptions(writeLayer!!))
+        runBlocking { writeLayer?.clear() }
+    }
+
+    @AfterEach
+    fun after() {
+        writeLayer?.close()
     }
 
     @Test

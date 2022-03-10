@@ -58,12 +58,12 @@ private fun <T> serialMessageHandler(options: QueueOptions<T>): MessageHandler<T
     }
 }
 
-internal fun <T> CoroutineScope.queueMessageHandler(options: QueueOptions<T>) = actor<PersistentQueueMessage<T>>(capacity = 1000) {
+internal fun <T> CoroutineScope.queueMessageHandler(options: QueueOptions<T>) = actor<PersistentQueueMessage<T>>(capacity = 100) {
     consumeUntilCancelled(channel, messageHandler(options))
 }
 
 private fun <M : PersistentQueueMessage<*>> CoroutineScope.subActor(context: CoroutineContext = EmptyCoroutineContext, handler: suspend (M) -> Unit) =
-    actor<M>(capacity = 1000, context = context) {
+    actor<M>(capacity = 100, context = context) {
         consumeUntilCancelled(channel, handler)
     }
 

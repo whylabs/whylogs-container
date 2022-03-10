@@ -11,9 +11,10 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.actor
 import org.slf4j.LoggerFactory
 
+// TODO rename this to something like a MergeMap. Now the main feature is merging items of T into the Vs, not buffering.
 interface BufferedPersistentMap<BufferedItems, MapKeyType, MapValueType> {
     val map: PersistentMap<MapKeyType, MapValueType>
-    suspend fun buffer(item: BufferedItems)
+    suspend fun merge(item: BufferedItems)
     suspend fun mergeBuffered(increment: PopSize, done: CompletableDeferred<Unit>? = null)
 }
 
@@ -54,7 +55,12 @@ data class QueueBufferedPersistentMapConfig<BufferedItems, MapKeyType, MapValueT
      */
     val delay: Long = 1_000,
 
-    val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+    /**
+     * Whether or not to enable buffering. When this is true, the map will first buffer each of the
+     * [BufferedItems] in a queue and asynchronously work through that. When this is false, the items
+     * are reduced into the [MapValueType] as they come in, one by one.
+     */
+    val buffer: Boolean = false,
 )
 
 private class MergeChannelMessage(val increment: PopSize, val done: CompletableDeferred<Unit>? = null)
@@ -84,7 +90,7 @@ class QueueBufferedPersistentMap<BufferItems, MayKeyType, MapValueType>(
         val block: suspend (List<BufferItems>) -> Unit = { pendingEntries ->
             logger.info("Merging ${pendingEntries.size} pending requests into profiles for upload.")
 
-            // Group all of the entries up by the data that make them unique
+            // Group all the entries up by the data that make them unique
             val groupedEntries = pendingEntries.groupBy(config.groupByBlock)
 
             // For each group, look up the current items that we're storing for the key and update it with each of
@@ -106,13 +112,24 @@ class QueueBufferedPersistentMap<BufferItems, MayKeyType, MapValueType>(
         }
     }
 
-    override suspend fun buffer(item: BufferItems) = config.queue.push(listOf(item))
+    override suspend fun merge(item: BufferItems) {
+        if (config.buffer) {
+            config.queue.push(listOf(item))
+        } else {
+            val key = config.groupByBlock(item)
+            map.set(key) { currentMapValue ->
+                config.mergeBlock(currentMapValue ?: config.defaultValue(key), item)
+            }
+        }
+    }
 
     override suspend fun mergeBuffered(increment: PopSize, done: CompletableDeferred<Unit>?) {
         // We don't care about delivering messages if there is already one being handled because the logic
         // of popping items inherently pops until there are none left, triggering this while one is in progress
         // wouldn't matter so we use offer which is just a no-op if the buffer is full, which it will be if
         // anything is happening since the capacity is set to Channel.RENDEZVOUS
-        mergeChannel.offer(MergeChannelMessage(increment, done))
+        if (config.buffer) {
+            mergeChannel.offer(MergeChannelMessage(increment, done))
+        }
     }
 }

@@ -1,9 +1,9 @@
 package ai.whylabs.services.whylogs.core.writer
 
 import ai.whylabs.service.model.SegmentTag
-import ai.whylabs.services.whylogs.core.IEnvVars
 import ai.whylabs.services.whylogs.core.SegmentTagPrefix
-import ai.whylabs.services.whylogs.core.WriterTypes
+import ai.whylabs.services.whylogs.core.config.IEnvVars
+import ai.whylabs.services.whylogs.core.config.WriterTypes
 import com.github.michaelbull.retry.policy.RetryPolicy
 import com.github.michaelbull.retry.policy.fullJitterBackoff
 import com.github.michaelbull.retry.policy.limitAttempts
@@ -12,11 +12,16 @@ import com.whylogs.core.DatasetProfile
 
 internal val retryPolicy: RetryPolicy<Throwable> = limitAttempts(3) + fullJitterBackoff(base = 10, max = 5_000)
 
+data class WriteResult(
+    val type: String,
+    val uri: String? = null
+)
+
 interface Writer {
     /**
      * @return A string URI where the written profile resides, if one exists.
      */
-    suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String): String?
+    suspend fun write(profile: DatasetProfile, orgId: String, datasetId: String): WriteResult
 
     fun getTagString(tags: List<SegmentTag>): String {
         return if (tags.isEmpty()) "NO_TAGS" else tags.joinToString(",") { "[${it.key}=${it.value}]" }
