@@ -49,7 +49,7 @@ class QueueMessageHandlerTests {
             val mockWriteLayer = spyk(MockQueueWriteLayer<String>())
             val options = QueueOptions(mockWriteLayer, limitAttempts(2))
 
-            every { mockWriteLayer.concurrentReadWrites } returns (true)
+            every { mockWriteLayer.concurrentPushPop } returns (true)
             val queue = PersistentQueue(options)
 
             val done = CompletableDeferred<Unit>()
@@ -186,9 +186,8 @@ class QueueMessageHandlerTests {
 
             // There should still be all 3 items left in the queue
             try {
-                queue.pop(PopSize.N(20)) { throw Exception("oops") }
+                queue.pop(PopSize.N(20)) { throw Exception("intentional error") }
             } catch (t: Throwable) {
-                println("Successfully failed")
             }
 
             queue.pop(PopSize.N(3)) { items ->
@@ -247,20 +246,17 @@ class PersistentSqliteQueueTests {
 
             // There should still be all 3 items left in the queue
             try {
-                it.pop(PopSize.N(20)) { throw Exception("oops") }
+                it.pop(PopSize.N(20)) { throw Exception("intentional error") }
             } catch (t: Throwable) {
             }
 
-            println("a")
             it.pop(PopSize.N(3)) { items ->
                 Assertions.assertEquals(items, listOf("a", "b", "c"))
             }
 
-            println("b")
             it.pop(PopSize.N(3)) { items ->
                 Assertions.assertEquals(items, emptyList<String>())
             }
-            println("c")
         }
     }
 }

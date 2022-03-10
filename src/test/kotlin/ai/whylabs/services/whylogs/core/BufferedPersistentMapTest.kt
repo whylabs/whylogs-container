@@ -80,9 +80,9 @@ class BufferedPersistentMapTest {
             mapContent
         }
 
-        // Make sure its not in the queue anymore
+        // Make sure it's not in the queue anymore
         queue.pop(PopSize.All) {
-            throw RuntimeException("This shouldn't be called because queuContent should be empty")
+            Assertions.assertEquals(0, it.size, "Should have no items to pop.")
         }
     }
 
@@ -123,7 +123,7 @@ class BufferedPersistentMapTest {
 
         // Make sure its not in the queue anymore
         queue.pop(PopSize.All) {
-            throw RuntimeException("This shouldn't be called because queuContent should be empty")
+            Assertions.assertEquals(0, it.size, "Should have no items to pop.")
         }
     }
 }

@@ -4,23 +4,35 @@ plugins {
     idea
     kotlin("jvm") version "1.4.10"
     application
-    id("org.jlleitschuh.gradle.ktlint") version "10.2.0"
+    id("org.jlleitschuh.gradle.ktlint") version "10.2.1"
+    id("com.adarshr.test-logger") version "3.2.0"
 }
 group = "ai.whylabs.services"
 version = "1.0-SNAPSHOT"
-
-// You'll need to generate an API token in Gitlab that has api permissions.
-val gitlabMavenToken = System.getenv("MAVEN_TOKEN")
 
 repositories {
     mavenCentral()
 }
 
-tasks.test {
-    useJUnitPlatform()
-    testLogging {
-        events("passed", "skipped", "failed")
+tasks {
+    test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+        }
     }
+}
+
+testlogger {
+    theme = com.adarshr.gradle.testlogger.theme.ThemeType.MOCHA
+    showFullStackTraces = true
+
+    // Show output for all tests. Sometimes tests pass by mistake while logging errors and this makes
+    // it possible to see that.
+    showStandardStreams = true
+    showPassedStandardStreams = true
+    showSkippedStandardStreams = true
+    showFailedStandardStreams = true
 }
 
 tasks.withType<KotlinCompile>().configureEach {
@@ -30,17 +42,44 @@ tasks.withType<KotlinCompile>().configureEach {
         // Silence warnings about using Kotlin's actor and similar types. They don't yet have
         // replacements that Kotlin recommends using. When that changes we can update them.
         freeCompilerArgs = freeCompilerArgs + listOf(
-            "-Xuse-experimental=kotlinx.coroutines.ObsoleteCoroutinesApi"
+            "-Xopt-in=kotlinx.coroutines.ObsoleteCoroutinesApi"
         )
     }
 }
 
+sourceSets {
+    create("integTest") {
+        compileClasspath += sourceSets.main.get().output + sourceSets.test.get().output
+        runtimeClasspath += sourceSets.main.get().output + sourceSets.test.get().output
+
+        java {
+            srcDir("src/integ/kotlin")
+        }
+    }
+}
+
+val integTestImplementation: Configuration by configurations.getting {
+    extendsFrom(configurations.testImplementation.get())
+}
+val integTestRuntimeOnly: Configuration by configurations.getting {
+    extendsFrom(configurations.testRuntimeOnly.get())
+}
+
+val integrationTest = task<Test>("integTest") {
+    testClassesDirs = sourceSets["integTest"].output.classesDirs
+    classpath = sourceSets["integTest"].runtimeClasspath
+    shouldRunAfter("test")
+    useJUnitPlatform()
+}
+
+val javalinVersion = "4.4.0"
+
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.4.10")
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.4.10")
-    implementation("io.javalin:javalin:4.3.0")
-    implementation("io.javalin:javalin-openapi:4.3.0")
-    implementation("io.swagger.core.v3:swagger-core:2.1.5")
+    implementation("io.javalin:javalin:$javalinVersion")
+    implementation("io.javalin:javalin-openapi:$javalinVersion")
+    implementation("io.swagger.core.v3:swagger-core:2.1.13")
     implementation("org.webjars:swagger-ui:3.24.3")
 
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.12.3")
@@ -69,6 +108,6 @@ dependencies {
 }
 
 application {
-    mainClassName = "ai.whylabs.services.whylogs.MainKt"
+    mainClass.set("ai.whylabs.services.whylogs.MainKt")
     applicationDefaultJvmArgs = listOf("-Dkotlinx.coroutines.debug")
 }
