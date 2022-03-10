@@ -2,7 +2,7 @@ name: Workflow
 
 on:
   push:
-    branches: ["mainline"]
+    branches: [ "mainline" ]
   pull_request:
     branches: "*"
 
@@ -33,6 +33,10 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           arguments: test
+      - name: Integration tests
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: integTest
 
       # Docker stuff
       - name: Set up QEMU

@@ -1,8 +1,10 @@
 package ai.whylabs.services.whylogs.core
 
 import ai.whylabs.service.invoker.ApiException
+import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMap
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMapConfig
+import ai.whylabs.services.whylogs.persistent.map.InMemoryMapWriteLayer
 import ai.whylabs.services.whylogs.persistent.map.MapMessageHandlerOptions
 import ai.whylabs.services.whylogs.persistent.map.PersistentMap
 import ai.whylabs.services.whylogs.persistent.map.SqliteMapWriteLayer
@@ -23,39 +25,48 @@ import java.util.concurrent.TimeUnit
 
 class WhyLogsProfileManager(
     private val executorService: ScheduledExecutorService = Executors.newScheduledThreadPool(1),
-    period: String?,
-    currentTime: Instant = Instant.now(),
+    currentTime: Instant = Instant.now(), // TODO this needs to be configurable and included on disk somehow for integ tests
     private val envVars: IEnvVars = EnvVars(),
-    private val writer: Writer = if (envVars.writer == WriterTypes.S3) S3Writer() else SongbirdWriter(),
+    private val writer: Writer = envVars.getProfileWriter(),
     private val orgId: String = envVars.orgId,
     private val sessionId: String = UUID.randomUUID().toString(),
     writeOnStop: Boolean = true,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val sessionTimeState = currentTime
-    private val chronoUnit: ChronoUnit = ChronoUnit.valueOf(period ?: ChronoUnit.HOURS.name)
+    private val chronoUnit: ChronoUnit = envVars.whylogsPeriod
 
     private val queue = PersistentQueue(
         QueueOptions(
             queueWriteLayer = when (envVars.requestQueueingMode) {
-                RequestQueueingMode.IN_MEMORY -> {
+                WriteLayer.IN_MEMORY -> {
                     logger.info("Using InMemoryWriteLayer for request queue.")
                     InMemoryQueueWriteLayer()
                 }
-                RequestQueueingMode.SQLITE -> {
+                WriteLayer.SQLITE -> {
                     logger.info("Using SqliteQueueWriteLayer for request queue.")
                     SqliteQueueWriteLayer("pending-requests", LogRequestSerializer())
                 }
             }
         )
     )
+
     private val map = PersistentMap(
         MapMessageHandlerOptions(
-            SqliteMapWriteLayer(
-                "dataset-profiles",
-                ProfileKeySerializer(),
-                ProfileEntrySerializer()
-            )
+            when (envVars.profileStorageMode) {
+                WriteLayer.IN_MEMORY -> {
+                    logger.info("Using InMemoryWriteLayer for profile store.")
+                    InMemoryMapWriteLayer()
+                }
+                WriteLayer.SQLITE -> {
+                    logger.info("Using SqliteQueueWriteLayer for profile store.")
+                    SqliteMapWriteLayer(
+                        "dataset-profiles",
+                        ProfileKeySerializer(),
+                        ProfileEntrySerializer()
+                    )
+                }
+            }
         )
     )
 
@@ -111,12 +122,14 @@ class WhyLogsProfileManager(
         windowStartTimeState = currentTime.truncatedTo(chronoUnit)
         logger.info("Starting with initial window: {}", windowStartTimeState)
 
-        executorService.scheduleWithFixedDelay(
-            this::rotate,
-            initialDelay,
-            Duration.of(1, chronoUnit).seconds,
-            TimeUnit.SECONDS
-        )
+        if (envVars.profileWritePeriod != ProfileWritePeriod.ON_DEMAND) {
+            executorService.scheduleWithFixedDelay(
+                this::rotate,
+                initialDelay,
+                Duration.of(1, envVars.profileWritePeriod.chronoUnit).seconds,
+                TimeUnit.SECONDS
+            )
+        }
 
         if (writeOnStop) {
             Runtime.getRuntime().addShutdownHook(Thread(this::stop))
@@ -127,13 +140,15 @@ class WhyLogsProfileManager(
         }
     }
 
-    suspend fun enqueue(request: LogRequest) = profiles.buffer(
-        BufferedLogRequest(
-            request = request,
-            sessionTime = sessionTimeState,
-            windowStartTime = windowStartTimeState
+    suspend fun enqueue(request: LogRequest) {
+        profiles.buffer(
+            BufferedLogRequest(
+                request = request,
+                sessionTime = sessionTimeState,
+                windowStartTime = request.timestamp?.let { Instant.ofEpochMilli(it).truncatedTo(chronoUnit) } ?: windowStartTimeState
+            )
         )
-    )
+    }
 
     suspend fun mergePending() {
         profiles.mergeBuffered(envVars.requestQueueProcessingIncrement)
@@ -176,9 +191,11 @@ class WhyLogsProfileManager(
         initializeProfiles()
     }
 
-    private suspend fun writeOutProfiles() {
-        logger.info("Writing out profiles for window: {}", windowStartTimeState)
+    internal suspend fun writeOutProfiles(): WriteProfilesResult {
+        logger.info("Writing out all profiles")
 
+        val profilePaths = mutableListOf<String>()
+        var profilesWritten = 0
         profiles.map.reset { stagedProfiles ->
             stagedProfiles.filter { profileEntry ->
                 logger.info("Writing out profiles for tags: {}", profileEntry.key)
@@ -187,7 +204,11 @@ class WhyLogsProfileManager(
                 val datasetId = profileEntry.value.datasetId
 
                 try {
-                    writer.write(profile, orgId, datasetId)
+                    writer.write(profile, orgId, datasetId)?.let {
+                        profilePaths.add(it)
+                        profilesWritten++
+                    }
+
                     false
                 } catch (e: ApiException) {
                     logger.error(
@@ -208,5 +229,12 @@ class WhyLogsProfileManager(
                 }
             }
         }
+
+        return WriteProfilesResult(profilesWritten, profilePaths)
     }
 }
+
+data class WriteProfilesResult(
+    val profilesWritten: Int,
+    val profilePaths: List<String>
+)

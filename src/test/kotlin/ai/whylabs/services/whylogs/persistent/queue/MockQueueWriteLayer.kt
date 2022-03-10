@@ -22,5 +22,5 @@ class MockQueueWriteLayer<T> : QueueWriteLayer<T> {
 
     override suspend fun size() = storage.size
 
-    override val concurrentReadWrites = false
+    override val concurrentPushPop = false
 }

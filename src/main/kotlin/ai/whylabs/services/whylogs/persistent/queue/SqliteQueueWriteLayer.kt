@@ -57,6 +57,7 @@ class SqliteQueueWriteLayer<T>(private val name: String, private val serializer:
         return items
     }
 
+    // TODO TEST that queue recovers from SQLiteException
     override suspend fun pop(n: Int) {
         // TODO this query is nicer and probably performs better but it requires sqlite to be built
         // with  SQLITE_ENABLE_UPDATE_DELETE_LIMIT flag.
@@ -85,5 +86,5 @@ class SqliteQueueWriteLayer<T>(private val name: String, private val serializer:
         return size ?: throw IllegalStateException("Couldn't get the size")
     }
 
-    override val concurrentReadWrites = true
+    override val concurrentPushPop = true
 }

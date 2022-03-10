@@ -2,11 +2,11 @@ package ai.whylabs.services.whylogs.persistent.queue
 
 interface QueueWriteLayer<T> {
     /**
-     * Specify whether or not this write layer is capable of handling reads and writes
-     * concurrently. The queue handler will parallelize the incoming read/write requests
+     * Specify whether this write layer is capable of handling pushing and popping
+     * concurrently. The queue handler will parallelize the incoming push/pop requests
      * if this can support it. Otherwise, they will be serialized.
      */
-    val concurrentReadWrites: Boolean
+    val concurrentPushPop: Boolean
     suspend fun push(t: List<T>)
     suspend fun peek(n: Int): List<T>
     suspend fun pop(n: Int)

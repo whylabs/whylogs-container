@@ -1,6 +1,7 @@
 package ai.whylabs.services.whylogs
 
 import ai.whylabs.services.whylogs.core.EnvVars
+import ai.whylabs.services.whylogs.core.IEnvVars
 import ai.whylabs.services.whylogs.core.WhyLogsController
 import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.DeserializationFeature
@@ -27,11 +28,14 @@ private val mapper = jacksonMapperBuilder()
         configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
     }
 
-fun main(): Unit = try {
-    val whylogs = WhyLogsController()
-    val envVars = EnvVars()
+fun main() {
+    startServer()
+}
 
-    Javalin.create {
+fun startServer(envVars: IEnvVars = EnvVars()): Javalin = try {
+    val whylogs = WhyLogsController(envVars)
+
+    val server = Javalin.create {
         it.registerPlugin(getConfiguredOpenApiPlugin())
         it.defaultContentType = "application/json"
         it.showJavalinBanner = false
@@ -39,12 +43,18 @@ fun main(): Unit = try {
     }.apply {
         Runtime.getRuntime().addShutdownHook(Thread { stop() })
         before("logs", whylogs::preprocess)
+        before("writeProfiles", whylogs::preprocess)
+
         exception(IllegalArgumentException::class.java) { e, ctx ->
             ctx.json(e.message ?: "Bad Request").status(400)
         }
         routes {
             path("logs") {
                 post(whylogs::track)
+            }
+//            val docs = document().body(WriteProfilesResponse::class.java)
+            path("writeProfiles") {
+                post(whylogs::writeProfiles)
             }
         }
         after("logs", whylogs::after)
@@ -53,6 +63,7 @@ fun main(): Unit = try {
     // TODO make a call to list models to test the api key on startup as a health check
 
     logger.info("Checkout Swagger UI at http://localhost:${envVars.port}/swagger-ui")
+    server
 } catch (t: Throwable) {
     // Need to manually shut down here because our manager hooks itself up to runtime hooks
     // and starts a background thread. It would keep the JVM alive without javalin running.

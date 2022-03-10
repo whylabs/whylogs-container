@@ -44,6 +44,7 @@ class PersistentQueue<T>(options: QueueOptions<T>) {
             } catch (t: Throwable) {
                 logger.error("Error in processing block", t)
                 processingDone.completeExceptionally(t)
+                throw t
             } finally {
                 logger.debug("Waiting for the final done signal")
                 done.await()
