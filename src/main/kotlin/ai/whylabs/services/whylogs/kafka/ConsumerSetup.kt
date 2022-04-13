@@ -7,10 +7,13 @@ import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.core.config.KafkaConfig
 import ai.whylabs.services.whylogs.core.config.WriterTypes
 import ai.whylabs.services.whylogs.core.randomAlphaNumericId
+import ai.whylabs.services.whylogs.util.sentry
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
 private val log = LoggerFactory.getLogger(KafkaConfig::class.java)
+
+// TODO change file name
 
 class ConsumerController(private val envConfig: IEnvVars, private val profileManager: WhyLogsProfileManager) {
     // This class shouldn't be created if kafka isn't configured
@@ -24,11 +27,14 @@ class ConsumerController(private val envConfig: IEnvVars, private val profileMan
             groupId = kafkaConfig.groupId,
         )
         log.info("Initializing kafka consumer.")
-        KotlinConsumer.consumer(config, ::process).apply { start() }
+        KotlinConsumer.consumer(config) { record ->
+            sentry("kafkaConsumer", "process") {
+                process(record)
+            }
+        }.apply { start() }
     }
 
     private suspend fun process(record: KafkaRecord<String, Map<String, Any>>): Boolean {
-
         val topic = record.rawRecord.topic()
         val datasetId = if (envConfig.writer == WriterTypes.WHYLABS) {
             kafkaConfig.datasetIds[topic] ?: throw IllegalStateException("Don't know which whylabs dataset id to use for topic $topic")

@@ -15,6 +15,8 @@ import io.javalin.plugin.json.JavalinJackson
 import io.javalin.plugin.openapi.OpenApiOptions
 import io.javalin.plugin.openapi.OpenApiPlugin
 import io.javalin.plugin.openapi.ui.SwaggerOptions
+import io.sentry.Sentry
+import io.sentry.SentryOptions
 import io.swagger.v3.oas.models.info.Info
 import kotlin.system.exitProcess
 import org.slf4j.LoggerFactory
@@ -34,6 +36,26 @@ fun main() {
 }
 
 fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
+
+    Sentry.init { options ->
+        options.dsn = "https://123a444ad5d54c5fa1e92b6e7fd9f1ee@o1200382.ingest.sentry.io/6324335"
+        // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
+        // We recommend adjusting this value in production.
+        options.tracesSampleRate = .2
+        options.release = System.getProperty("RELEASE") ?: "local" // TODO inject container sha as env variable
+        options.environment = System.getProperty("STAGE") ?: "development"
+        // When first trying Sentry it's good to see what the SDK is doing:
+        options.setDebug(true)
+        options.cacheDirPath = "/tmp/sentry/"
+        options.dsn = "http://key@2.localhost:9020/19"
+//        options.proxy = SentryOptions.Proxy("localhost", "9020")
+    }
+
+
+    Thread.setDefaultUncaughtExceptionHandler { t, e ->
+        Sentry.captureException(e, t.name)
+    }
+
     val profileManager = WhyLogsProfileManager(envVars = envVars)
     if (envVars.kafkaConfig != null) {
         ConsumerController(envVars, profileManager)

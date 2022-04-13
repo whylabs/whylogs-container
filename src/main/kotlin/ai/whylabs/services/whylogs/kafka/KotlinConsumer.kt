@@ -1,7 +1,10 @@
 package ai.whylabs.services.whylogs.kafka
 
+import ai.whylabs.services.whylogs.util.sentry
+import ai.whylabs.services.whylogs.util.setException
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import io.sentry.Sentry
 import java.time.Duration
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
@@ -96,29 +99,34 @@ class KotlinConsumer<K, V>(
                 log.debug("Got no records to process.")
             } else {
                 log.info("Got ${records.count()} records to process.")
-                records.forEach forEach@{ record ->
-                    // TODO how should you handle partial failures within messages batches? We prob don't have this problem
-                    // But I should know the answer.
-                    // TODO how should we handle errors here? What if the message is nonsense?
-                    val valueKey: String? = record.key()
-                    val valueString: String = record.value()
-                    val kafkaRecord = try {
-                        val parsedKey: K? = valueKey?.let { mapper.readValue(valueKey, keyType) }
-                        val parsedRecord: V = mapper.readValue(valueString, valueType) // TODO is there a built in method of deserializing?
-                        KafkaRecord(parsedRecord, parsedKey, record)
-                    } catch (t: Throwable) {
-                        log.error("Error deserializing the kafka record.", t)
-                        return@forEach
-                    }
+                sentry("kafkaConsumer", "processBatch") { processBatchTr ->
+                    processBatchTr.setTag("recordCount", records.count().toString())
+                    records.forEach forEach@{ record ->
+                        sentry<Unit>("kafkaConsumer", "processRecord") { processRecordTr ->
+                            // TODO how should you handle partial failures within messages batches? We prob don't have this problem
+                            // But I should know the answer.
+                            // TODO how should we handle errors here? What if the message is nonsense?
+                            val valueKey: String? = record.key()
+                            val valueString: String = record.value()
+                            val kafkaRecord = try {
+                                val parsedKey: K? = valueKey?.let { mapper.readValue(valueKey, keyType) }
+                                val parsedRecord: V = mapper.readValue(valueString, valueType) // TODO is there a built in method of deserializing?
+                                KafkaRecord(parsedRecord, parsedKey, record)
+                            } catch (t: Throwable) {
+                                log.error("Error deserializing the kafka record.", t)
+                                processRecordTr.setException(t) // TODO what am I supposed to do when I want to log exceptions in transactions? Do I ignore Sentry.captureException or do it also
+                                return@forEach
+                            }
 
-                    try {
-                        process(kafkaRecord)
-                    } catch (t: Throwable) {
-                        log.error("Error processing kafka record $valueKey $valueString, dropping permanently.", t)
+                            try {
+                                process(kafkaRecord)
+                            } catch (t: Throwable) {
+                                log.error("Error processing kafka record $valueKey $valueString, dropping permanently.", t)
+                                processRecordTr.setException(t)
+                            }
+                        }
                     }
                 }
-                // TODO don't I have to commit?
-                // Apparently auto commit mode is the default so only if that is disabled
             }
         }
     }

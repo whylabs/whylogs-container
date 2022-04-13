@@ -89,6 +89,8 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.10.1")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.10.1")
 
+    implementation("io.sentry:sentry:5.7.2")
+
     // AWS
     implementation("com.amazonaws:aws-java-sdk-s3:1.11.+")
     implementation("com.amazonaws:aws-java-sdk-s3")

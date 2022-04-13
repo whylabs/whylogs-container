@@ -4,6 +4,7 @@ import ai.whylabs.services.whylogs.persistent.map.PersistentMap
 import ai.whylabs.services.whylogs.persistent.queue.PersistentQueue
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
 import ai.whylabs.services.whylogs.util.repeatUntilCancelled
+import ai.whylabs.services.whylogs.util.sentry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,7 +71,7 @@ class QueueBufferedPersistentMap<BufferItems, MayKeyType, MapValueType>(
     override val map = config.map
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    // This channel will doing a lot of in memory group by so we'll run it on the default dispatcher instead of the IO one.
+    // This channel will be doing a lot of in memory group-by. We'll run it on the default dispatcher instead of the IO one.
     private val mergeChannel = CoroutineScope(Dispatchers.Default).actor<MergeChannelMessage>(capacity = Channel.RENDEZVOUS) {
         repeatUntilCancelled(logger) {
             for (msg in channel) {
@@ -81,27 +82,30 @@ class QueueBufferedPersistentMap<BufferItems, MayKeyType, MapValueType>(
     }
 
     private suspend fun handleMergeMessage(popSize: PopSize = PopSize.All) {
-        val block: suspend (List<BufferItems>) -> Unit = { pendingEntries ->
-            logger.info("Merging ${pendingEntries.size} pending requests into profiles for upload.")
+        sentry("track", "mergeMessages") { tr ->
+            val block: suspend (List<BufferItems>) -> Unit = { pendingEntries ->
+                tr.setTag("pendingEntries", pendingEntries.size.toString()) // TODO is this an anti pattern? Should tags have small cardinality?
+                logger.info("Merging ${pendingEntries.size} pending requests into profiles for upload.")
 
-            // Group all of the entries up by the data that make them unique
-            val groupedEntries = pendingEntries.groupBy(config.groupByBlock)
+                // Group all of the entries up by the data that make them unique
+                val groupedEntries = pendingEntries.groupBy(config.groupByBlock)
 
-            // For each group, look up the current items that we're storing for the key and update it with each of
-            // the pending items that we have buffered.
-            groupedEntries.forEach { (key, groupValues) ->
-                map.set(key) { currentMapValue ->
-                    groupValues.fold(currentMapValue ?: config.defaultValue(key), config.mergeBlock)
+                // For each group, look up the current items that we're storing for the key and update it with each of
+                // the pending items that we have buffered.
+                groupedEntries.forEach { (key, groupValues) ->
+                    map.set(key) { currentMapValue ->
+                        groupValues.fold(currentMapValue ?: config.defaultValue(key), config.mergeBlock)
+                    }
                 }
             }
-        }
 
-        when (popSize) {
-            is PopSize.All -> {
-                config.queue.pop(popSize, block)
-            }
-            is PopSize.N -> {
-                config.queue.popUntilEmpty(popSize, block)
+            when (popSize) {
+                is PopSize.All -> {
+                    config.queue.pop(popSize, block)
+                }
+                is PopSize.N -> {
+                    config.queue.popUntilEmpty(popSize, block)
+                }
             }
         }
     }

@@ -4,6 +4,8 @@ import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.core.config.WriterTypes
 import ai.whylabs.services.whylogs.kafka.KotlinConsumer
+import ai.whylabs.services.whylogs.util.sentry
+import ai.whylabs.services.whylogs.util.setException
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import io.javalin.http.Context
@@ -15,7 +17,10 @@ import io.javalin.plugin.openapi.annotations.OpenApiContent
 import io.javalin.plugin.openapi.annotations.OpenApiParam
 import io.javalin.plugin.openapi.annotations.OpenApiRequestBody
 import io.javalin.plugin.openapi.annotations.OpenApiResponse
+import io.sentry.Sentry
+import io.sentry.SpanStatus
 import io.swagger.v3.oas.annotations.media.Schema
+import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
@@ -129,34 +134,43 @@ Here is an example from the output above
         responses = [OpenApiResponse("200"), OpenApiResponse("400", description = "Bad or invalid input body")]
     )
     fun track(ctx: Context) {
-        try {
-            val request = ctx.bodyStreamAsClass(LogRequest::class.java)
+        val id = UUID.randomUUID().toString()
+        sentry("foo6", "track") { tr ->
 
-            if (request.single == null && request.multiple == null) {
-                return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
-                return
+            try {
+                val request = ctx.bodyStreamAsClass(LogRequest::class.java)
+
+                if (request.single == null && request.multiple == null) {
+                    return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
+                    return
+                }
+
+                // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
+                // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
+                val prefixedTags = if (envVars.writer == WriterTypes.S3) request.tags else request.tags?.mapKeys { (key) ->
+                    "$SegmentTagPrefix$key"
+                }
+
+                val processedRequest = request.copy(tags = prefixedTags)
+
+                val span = tr.startChild("enqueue")
+                runBlocking {
+                    profileManager.enqueue(processedRequest)
+                }
+                span.finish()
+            } catch (t: MismatchedInputException) {
+                logger.warn("Invalid request format", t)
+                tr.setException(t)
+                throw IllegalArgumentException("Invalid request format", t)
+            } catch (t: JsonParseException) {
+                logger.warn("Invalid request format", t)
+                tr.setException(t)
+                throw IllegalArgumentException("Invalid request format", t)
+            } catch (t: Throwable) {
+                logger.error("Error handling request", t)
+                tr.setException(t)
+                throw t
             }
-
-            // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
-            // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
-            val prefixedTags = if (envVars.writer == WriterTypes.S3) request.tags else request.tags?.mapKeys { (key) ->
-                "$SegmentTagPrefix$key"
-            }
-
-            val processedRequest = request.copy(tags = prefixedTags)
-
-            runBlocking {
-                profileManager.enqueue(processedRequest)
-            }
-        } catch (t: MismatchedInputException) {
-            logger.warn("Invalid request format", t)
-            throw IllegalArgumentException("Invalid request format", t)
-        } catch (t: JsonParseException) {
-            logger.warn("Invalid request format", t)
-            throw IllegalArgumentException("Invalid request format", t)
-        } catch (t: Throwable) {
-            logger.error("Error handling request", t)
-            throw t
         }
     }
 
@@ -171,11 +185,16 @@ Here is an example from the output above
             OpenApiResponse("500", description = "Something unexpected went wrong.")
         ]
     )
-    fun writeProfiles(ctx: Context) {
-        return runBlocking {
-            val result = profileManager.writeOutProfiles()
-            val response = WriteProfilesResponse(profilesWritten = result.profilesWritten, profilePaths = result.profilePaths)
-            ctx.json(response)
+    fun writeProfiles(ctx: Context) = runBlocking<Unit> {
+        sentry("WhyLogsController", "writeProfiles") {
+            try {
+                val result = profileManager.writeOutProfiles()
+                val response = WriteProfilesResponse(profilesWritten = result.profilesWritten, profilePaths = result.profilePaths)
+                ctx.json(response)
+            } catch (t: Throwable) {
+                logger.error("Error writing", t)
+                throw t
+            }
         }
     }
 

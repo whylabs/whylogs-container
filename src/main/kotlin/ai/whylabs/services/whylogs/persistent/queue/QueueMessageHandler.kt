@@ -2,6 +2,9 @@ package ai.whylabs.services.whylogs.persistent.queue
 
 import ai.whylabs.services.whylogs.util.LoggingUtil.getLoggerForFile
 import ai.whylabs.services.whylogs.util.repeatUntilCancelled
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.math.min
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -9,9 +12,6 @@ import kotlinx.coroutines.channels.actor
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withTimeout
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
-import kotlin.math.min
 
 private val logger = getLoggerForFile()
 

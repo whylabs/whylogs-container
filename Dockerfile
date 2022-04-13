@@ -8,6 +8,8 @@ COPY scripts/ /opt/whylogs/scripts/
 # a sqlite database to persist dataset profiles across server runs.
 RUN apk update && apk add --no-cache python3 supervisor=4.2.0-r0 sqlite=3.32.1-r1 ngrep
 
+# TODO put release version here as RELEASE, same as sha sum
+
 EXPOSE 8080
 WORKDIR /opt/whylogs
 
