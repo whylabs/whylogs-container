@@ -16,6 +16,7 @@ import ai.whylabs.services.whylogs.persistent.queue.InMemoryQueueWriteLayer
 import ai.whylabs.services.whylogs.persistent.queue.PersistentQueue
 import ai.whylabs.services.whylogs.persistent.queue.QueueOptions
 import ai.whylabs.services.whylogs.persistent.queue.SqliteQueueWriteLayer
+import ai.whylabs.services.whylogs.util.message
 import com.whylogs.core.DatasetProfile
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
@@ -189,49 +190,38 @@ class WhyLogsProfileManager(
     }
 
     private fun rotate() = runBlocking {
-        logger.info("Rotating logs for the current window: {}", windowStartTimeState)
-        writeOutProfiles()
-        windowStartTimeState = Instant.now().truncatedTo(chronoUnit)
-        logger.info("New window time: {}", windowStartTimeState)
-        initializeProfiles()
+        try {
+            logger.info("Rotating logs for the current window: {}", windowStartTimeState)
+            writeOutProfiles()
+            windowStartTimeState = Instant.now().truncatedTo(chronoUnit)
+            logger.info("New window time: {}", windowStartTimeState)
+            initializeProfiles()
+        } catch (t: Throwable) {
+            // This function can't throw or it will cancel subsequent runs.
+            logger.error("Error when rotating logs for $windowStartTimeState", t)
+        }
     }
 
     internal suspend fun writeOutProfiles(): WriteProfilesResult {
-
         val profilePaths = mutableListOf<String>()
         var profilesWritten = 0
-        profiles.map.reset { stagedProfiles ->
-            logger.info("Writing out profiles. Total: ${stagedProfiles.size}")
-            stagedProfiles.filter { profileEntry ->
-                logger.info("Writing out profiles for tags: {}", profileEntry.key)
-                val profile = profileEntry.value.profile
-                val orgId = profileEntry.value.orgId
-                val datasetId = profileEntry.value.datasetId
+        profiles.map.process { current ->
+            val (key, profileEntry) = current
+            logger.info("Writing out profiles for tags: {}", key)
 
-                try {
-                    writer.write(profile, orgId, datasetId).let { result ->
-                        result.uri?.let { profilePaths.add(it) }
-                        profilesWritten++
-                    }
-
-                    false
-                } catch (e: ApiException) {
-                    logger.error(
-                        """
-                        API Exception writing to whylabs. Keeping profile ${profileEntry.key} to try later.
-                        Response: ${e.responseBody}
-                        Headers: ${e.responseHeaders}
-                        """.trimIndent(),
-                        e
-                    )
-                    true
-                } catch (e: Throwable) {
-                    logger.error(
-                        "Unexpected exception writing profiles. Keeping profile ${profileEntry.key} to try later",
-                        e
-                    )
-                    true
+            try {
+                writer.write(profileEntry.profile, profileEntry.orgId, profileEntry.datasetId).let { result ->
+                    result.uri?.let { profilePaths.add(it) }
+                    profilesWritten++
                 }
+
+                PersistentMap.ProcessResult.Success()
+            } catch (e: ApiException) {
+                logger.error(e.message("Keeping profile $key to try later."), e)
+                PersistentMap.ProcessResult.RetriableFailure(current, e)
+            } catch (e: Throwable) {
+                logger.error("Unexpected exception writing profiles. Keeping profile $key to try later", e)
+                PersistentMap.ProcessResult.RetriableFailure(current, e)
             }
         }
 

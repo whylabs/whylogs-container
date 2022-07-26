@@ -1,5 +1,6 @@
 package ai.whylabs.services.whylogs.util
 
+import ai.whylabs.service.invoker.ApiException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.lang.invoke.MethodHandles
@@ -12,4 +13,12 @@ object LoggingUtil {
      * like `FileNameKt`.
      */
     fun getLoggerForFile(): Logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
+}
+
+fun ApiException.message(extra: String): String {
+    return """
+    API Exception writing to whylabs. $extra
+    Response: ${this.responseBody}
+    Headers: ${this.responseHeaders}
+    """.trimIndent()
 }

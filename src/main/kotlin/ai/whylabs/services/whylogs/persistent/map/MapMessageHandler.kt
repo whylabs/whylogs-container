@@ -4,8 +4,11 @@ import ai.whylabs.services.whylogs.util.RetryOptions
 import ai.whylabs.services.whylogs.util.defaultRetryPolicy
 import ai.whylabs.services.whylogs.util.repeatUntilCancelled
 import com.github.michaelbull.retry.policy.RetryPolicy
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.channels.actor
 import kotlinx.coroutines.withTimeout
 import org.slf4j.LoggerFactory
@@ -28,6 +31,13 @@ internal sealed class PersistentMapMessage<K, V>(val done: CompletableDeferred<V
         done: CompletableDeferred<V?>,
         val everything: CompletableDeferred<Map<K, V>>,
         val processingDone: CompletableDeferred<Map<K, V>>,
+    ) : PersistentMapMessage<K, V>(done)
+
+    class ProcessMessage<K, V>(
+        done: CompletableDeferred<V?>,
+        val current: SendChannel<Pair<K, V>>,
+        val updated: ReceiveChannel<Pair<K, V>?>,
+        val timeoutMs: Long? = null,
     ) : PersistentMapMessage<K, V>(done)
 }
 
@@ -55,6 +65,7 @@ internal fun <K, V> CoroutineScope.mapMessageHandler(options: MapMessageHandlerO
                         is PersistentMapMessage.GetMessage<K, V> -> get(options, msg)
                         is PersistentMapMessage.SetMessage<K, V> -> set(options, msg)
                         is PersistentMapMessage.ResetMessage<K, V> -> reset(options, msg)
+                        is PersistentMapMessage.ProcessMessage<K, V> -> process(options, msg)
                     }
                 } catch (t: Throwable) {
                     logger.error("Error handling message ${msg.javaClass}", t)
@@ -118,7 +129,7 @@ private suspend fun <K, V> reset(
     message: PersistentMapMessage.ResetMessage<K, V>
 ) {
     withTimeout(defaultTimeoutMs) {
-        logger.debug("Reading everything from the map")
+        logger.debug("Reading everything from the map.")
 
         val everything = options.retryIfEnabled {
             options.writeLayer.getAll()
@@ -131,7 +142,7 @@ private suspend fun <K, V> reset(
         logger.debug("Wait for the consumer to finish processing new map state.")
         val updatedValues = message.processingDone.await()
 
-        // If its the same ref then there was no change so we're done
+        // If it's the same ref then there was no change and we're done
         if (everything === updatedValues) {
             logger.debug("No changes")
             message.done.complete(null)
@@ -147,4 +158,61 @@ private suspend fun <K, V> reset(
         message.done.complete(null)
         logger.debug("Done resetting item")
     }
+}
+
+private suspend fun <K, V> process(
+    options: MapMessageHandlerOptions<K, V>,
+    message: PersistentMapMessage.ProcessMessage<K, V>
+) {
+    logger.debug("Reading everything from the map.")
+
+    val everything = withTimeout(defaultTimeoutMs) {
+        options.retryIfEnabled {
+            options.writeLayer.getAll()
+        }
+    }
+
+    logger.debug("Returning everything one by one to the consumer")
+    val updatedValues = everything.toMutableMap()
+    try {
+        everything.entries.forEach { entry ->
+            // Send the current value over
+            logger.debug("Sending ${entry.key} over for processing")
+            message.current.send(entry.toPair())
+
+            // Wait for the new value to pop out
+            withTimeout(message.timeoutMs ?: defaultTimeoutMs) {
+                logger.debug("Waiting for updated item for ${entry.key}")
+                val updatedValue = message.updated.receive()
+                if (updatedValue != null) {
+                    // update the key if it's not null
+                    updatedValues[updatedValue.first] = updatedValue.second
+                } else {
+                    // otherwise, remove it
+                    updatedValues.remove(entry.key)
+                }
+                logger.debug("Got updated value for ${entry.key}")
+            }
+        }
+    } catch (t: CancellationException) {
+        // We just take what we already handled and finish
+        logger.error("Error when processing map", t)
+    } finally {
+        message.current.close()
+    }
+
+    if (everything == updatedValues) {
+        logger.debug("No changes")
+        message.done.complete(null)
+        return
+    }
+
+    // Reset the value to this map
+    logger.debug("Writing the updated value")
+    options.retryIfEnabled {
+        options.writeLayer.reset(updatedValues)
+    }
+
+    message.done.complete(null)
+    logger.debug("Done processing item")
 }
