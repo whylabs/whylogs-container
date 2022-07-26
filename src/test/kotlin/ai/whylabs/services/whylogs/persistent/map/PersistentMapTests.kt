@@ -1,5 +1,6 @@
 package ai.whylabs.services.whylogs.persistent.map
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions
@@ -90,6 +91,98 @@ class PersistentMapTests {
         map.reset { current ->
             // Make sure it worked
             Assertions.assertEquals(emptyMap<String, String>(), current)
+            current
+        }
+    }
+
+    @Test
+    fun `process works`() = runBlocking<Unit> {
+        val expected = mapOf(
+            "a" to "1",
+            "b" to "2",
+            "c" to "3",
+            "d" to "4",
+        )
+
+        expected.entries.forEach { (k, v) ->
+            map.set(k) { v }
+        }
+
+        map.process {
+            // mark everything as handled
+            PersistentMap.ProcessResult.Success()
+        }
+
+        // Use reset just to get a hold of the state for assertions
+        map.reset { current ->
+            // Make sure it worked
+            Assertions.assertEquals(emptyMap<String, String>(), current)
+            current
+        }
+    }
+
+    @Test
+    fun `partial process works`() = runBlocking<Unit> {
+
+        map.set("a") { "1" }
+        map.set("b") { "2" }
+        map.set("c") { "3" }
+        map.set("d") { "4" }
+
+        val expected = mapOf(
+            "c" to "3",
+            "d" to "4",
+        )
+
+        map.process {
+            // Only handle a and b
+            if (it.first == "a" || it.first == "b") {
+                PersistentMap.ProcessResult.Success()
+            } else {
+                PersistentMap.ProcessResult.RetriableFailure(it, IllegalStateException(""))
+            }
+        }
+
+        // Use reset just to get a hold of the state for assertions
+        map.reset { current ->
+            // Make sure it worked
+            Assertions.assertEquals(expected, current)
+            current
+        }
+    }
+
+    @Test
+    fun `partial process works for timeouts`() = runBlocking<Unit> {
+
+        map.set("a") { "1" }
+        map.set("b") { "2" }
+        map.set("c") { "3" }
+        map.set("d") { "4" }
+
+        val timeout = 200L
+        val expected = mapOf(
+            "c" to "3",
+            "d" to "4",
+        )
+
+        var iterations = 0
+        map.process(timeout) {
+            // Only handle a and b
+            iterations += 1
+            if (it.first == "a" || it.first == "b") {
+                PersistentMap.ProcessResult.Success()
+            } else {
+                // Stall long enough that we get cancelled
+                delay(timeout * 2)
+                PersistentMap.ProcessResult.PermanentFailure(IllegalStateException())
+            }
+        }
+
+        // Use reset just to get a hold of the state for assertions
+        Assertions.assertEquals(3, iterations)
+        map.reset { current ->
+            // Make sure it worked
+            Assertions.assertEquals(expected, current)
             current
         }
     }

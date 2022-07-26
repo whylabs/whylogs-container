@@ -2,7 +2,7 @@ package ai.whylabs.services.whylogs.core.config
 
 import ai.whylabs.services.whylogs.core.writer.DebugFileSystemWriter
 import ai.whylabs.services.whylogs.core.writer.S3Writer
-import ai.whylabs.services.whylogs.core.writer.SongbirdWriter
+import ai.whylabs.services.whylogs.core.writer.WhyLabsWriter
 import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
 import java.time.temporal.ChronoUnit
@@ -68,7 +68,7 @@ interface IEnvVars {
     fun getProfileWriter(): Writer {
         return when (this.writer) {
             WriterTypes.S3 -> S3Writer(this)
-            WriterTypes.WHYLABS -> SongbirdWriter(this)
+            WriterTypes.WHYLABS -> WhyLabsWriter(this)
             WriterTypes.DEBUG_FILE_SYSTEM -> DebugFileSystemWriter(this)
         }
     }

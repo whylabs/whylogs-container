@@ -3,6 +3,7 @@ package ai.whylabs.services.whylogs.persistent.map
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 
@@ -78,6 +79,59 @@ class PersistentMap<K, V>(options: MapMessageHandlerOptions<K, V>) {
                 processingDone.completeExceptionally(t)
             }
 
+            done.await()
+        }
+    }
+
+    /**
+     * Type that signals the result of each item processed in [process]
+     */
+    sealed class ProcessResult<V> {
+        class Success<V>(val value: V? = null) : ProcessResult<V>()
+        class RetriableFailure<V>(val value: V, val exception: Throwable) : ProcessResult<V>()
+        class PermanentFailure<V>(val exception: Throwable) : ProcessResult<V>()
+    }
+
+    /**
+     * Process items in the map one at a time.
+     * This is similar to [reset] but instead of handling the content of the entire map it surfaces
+     * each item one at a time. The timeout is applied to each individual item rather than the entire
+     * map like it does in [reset].
+     */
+    suspend fun process(timeoutMs: Long? = null, block: suspend (Pair<K, V>) -> ProcessResult<Pair<K, V>>) {
+        withContext(scope.coroutineContext) {
+            val done = CompletableDeferred<V?>()
+            val current = Channel<Pair<K, V>>(capacity = 1)
+            val updated = Channel<Pair<K, V>?>(capacity = 1)
+
+            act.send(PersistentMapMessage.ProcessMessage(done, current, updated, timeoutMs))
+            logger.debug("Processing map")
+            for (item in current) {
+                try {
+                    logger.debug("Handling current map state for ${item.first}")
+                    when (val result = block(item)) {
+                        is ProcessResult.Success -> {
+                            logger.debug("Successfully handled current map state for ${item.first}")
+                            updated.send(result.value)
+                        }
+                        is ProcessResult.PermanentFailure -> {
+                            logger.error("Permanent failure while handling ${item.first}", result.exception)
+                            updated.send(null)
+                        }
+                        is ProcessResult.RetriableFailure -> {
+                            logger.error("Failure while handling ${item.first}", result.exception)
+                            updated.send(result.value)
+                        }
+                    }
+                } catch (t: Throwable) {
+                    logger.error("Error while processing", t)
+                    updated.close(t)
+                    break
+                }
+            }
+
+            logger.debug("Done processing map")
+            updated.close()
             done.await()
         }
     }

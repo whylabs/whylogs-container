@@ -8,11 +8,8 @@
 
     </Appenders>
     <Loggers>
-        <Logger name="ai.whylabs" level="info">
+        <Root level="info"  additivity="false">
             <AppenderRef ref="Console"/>
-        </Logger>
-
-        <Root level="all">
         </Root>
     </Loggers>
 </Configuration>
