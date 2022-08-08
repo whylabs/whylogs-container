@@ -42,7 +42,7 @@ class ConsumerController(private val envConfig: IEnvVars, private val profileMan
             multiple = null // Need a way to support this mode as well
         )
 
-        return return try {
+        return try {
             profileManager.handle(request)
             profileManager.mergePending()
             true

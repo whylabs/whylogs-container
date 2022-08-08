@@ -17,8 +17,7 @@ suspend inline fun CoroutineScope.repeatUntilCancelled(log: Logger, block: () ->
             // break this loop.
             log.info("coroutine on ${Thread.currentThread().name} timed out")
         } catch (ex: CancellationException) {
-            log.info("coroutine on ${Thread.currentThread().name} cancelled")
-            throw ex
+            log.info("coroutine on ${Thread.currentThread().name} cancelled: ${ex.javaClass} ${ex.message}")
         } catch (ex: Throwable) {
             log.error("${Thread.currentThread().name} failed. Retrying...", ex)
         }
