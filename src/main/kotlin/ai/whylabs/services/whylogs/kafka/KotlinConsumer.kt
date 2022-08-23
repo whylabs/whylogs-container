@@ -1,14 +1,15 @@
 package ai.whylabs.services.whylogs.kafka
 
 import ai.whylabs.services.whylogs.util.repeatUntilCancelled
-import ai.whylabs.services.whylogs.util.waitUntil
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.plus
+import kotlinx.coroutines.runBlocking
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.ConsumerRecords
@@ -16,8 +17,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.errors.WakeupException
 import org.slf4j.LoggerFactory
 import java.time.Duration
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.CoroutineContext
 
 private val log = LoggerFactory.getLogger(KotlinConsumer::class.java)
 
@@ -55,8 +54,7 @@ class KotlinConsumer<K, V>(
     private val valueType: TypeReference<V>,
     private val keyType: TypeReference<K>,
     private val process: suspend (record: KafkaRecord<K, V>) -> Boolean
-) :
-    CoroutineScope {
+) {
 
     companion object {
         inline fun <reified K, reified V> consumer(
@@ -67,26 +65,9 @@ class KotlinConsumer<K, V>(
         }
     }
 
-    init {
-        Runtime.getRuntime().addShutdownHook(Thread(::stop))
-    }
-
-    private val supervisorJob = SupervisorJob()
-    override val coroutineContext: CoroutineContext
-        get() = Dispatchers.IO + supervisorJob
-
-    private fun stop() {
-        if (supervisorJob.isActive) {
-            log.info("Stopping kotlin consumers.")
-            supervisorJob.cancel()
-        }
-    }
-
-    fun start() = launch {
+    fun start() {
         log.info("Creating ${config.consumerCount} consumers with dedicated threads.")
-        repeat(config.consumerCount) {
-            launchWorker(it)
-        }
+        repeat(config.consumerCount) { launchWorker(it) }
     }
 
     private suspend fun processRecords(records: ConsumerRecords<String, String>) {
@@ -112,17 +93,19 @@ class KotlinConsumer<K, V>(
         }
     }
 
-    private fun CoroutineScope.launchWorker(id: Int) = launch {
-        val done = AtomicBoolean(false)
-        getConsumer<K, V>(config).use { consumer ->
+    private fun launchWorker(id: Int) {
+        val context = newSingleThreadContext("kafka-worker-$id")
+        val scope = CoroutineScope(context)
+
+        scope.launch {
+            val consumer = getConsumer(config)
+
             Runtime.getRuntime().addShutdownHook(
                 Thread {
-                    waitUntil { supervisorJob.isCancelled }
-
                     log.info("Waking up kafka consumer $id for shutdown")
                     consumer.wakeup()
-
-                    waitUntil { done.get() }
+                    // Has to run on the same thread as the kafka consumer
+                    runBlocking(context) { consumer.close() }
                     log.info("Done shutting down consumer $id")
                 }
             )
@@ -132,6 +115,7 @@ class KotlinConsumer<K, V>(
                 val records = try {
                     consumer.poll(Duration.ofSeconds(10))
                 } catch (e: WakeupException) {
+                    cancel()
                     throw CancellationException("Polling interrupted for shutdown", e)
                 }
 
@@ -144,7 +128,5 @@ class KotlinConsumer<K, V>(
                 }
             }
         }
-        log.info("Consumer $id is shutting down.")
-        done.set(true)
     }
 }

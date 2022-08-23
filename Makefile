@@ -19,7 +19,7 @@ debug: ## Run the service in debug mode so you can connect to it via remote JVM 
 	./gradlew run --debug-java
 
 run-docker: ## Run the Docker container using a local.env file.
-	docker run -it --rm -p 127.0.0.1:5005:5005 -p 127.0.0.1:8080:8080 --env-file local.env --name $(NAME) $(TAG)
+	docker run -it --rm --net=host --env-file local.env $(TAG)
 
 poll-sqlite-size: ## If you run the service locally then this will echo info about the sqlite storage.
 	ls -1  /tmp/ | grep -e 'sqlite$$' | xargs -I{} bash -c "echo -n '{}:' && sqlite3 /tmp/{} 'select count(1) from items;'" && echo;
