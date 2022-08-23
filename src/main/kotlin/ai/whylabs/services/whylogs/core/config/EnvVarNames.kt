@@ -19,6 +19,9 @@ enum class EnvVarNames(private val default: String? = null) {
     // container.api_key
     CONTAINER_API_KEY,
 
+    // container.profile_storage_mode
+    PROFILE_STORAGE_MODE(WriteLayer.IN_MEMORY.name),
+
     FILE_SYSTEM_WRITER_ROOT("whylogs-profiles"),
 
     /**
@@ -29,6 +32,15 @@ enum class EnvVarNames(private val default: String? = null) {
     //
     // Profile upload stuff
     //
+
+    /**
+     * How frequent the container should upload profiles. This defaults to the same cadence as the
+     * model definition. For an hourly model, you'll upload profiles on an hourly basis. If this is set
+     * to MINUTE then you'll upload profiles every minute.
+     */
+    // upload.write_period
+    PROFILE_WRITE_PERIOD,
+
     /**
      * Used to determine where profiles are uploaded to.
      * Must be a string value of [WriterTypes]. Other config values become
@@ -83,8 +95,6 @@ enum class EnvVarNames(private val default: String? = null) {
      */
     // whylogs.period
     WHYLOGS_PERIOD,
-
-    PROFILE_WRITE_PERIOD,
 
     // Kafka stuff
     /**
@@ -144,9 +154,7 @@ enum class EnvVarNames(private val default: String? = null) {
      * don't want to scale the container horizontally.
      */
     // rest.queueing_mode
-    REQUEST_QUEUEING_MODE(WriteLayer.SQLITE.name),
-
-    PROFILE_STORAGE_MODE(WriteLayer.SQLITE.name),
+    REQUEST_QUEUEING_MODE(WriteLayer.IN_MEMORY.name),
 
     // rest.request_queueing_enabled
     REQUEST_QUEUEING_ENABLED("false"),

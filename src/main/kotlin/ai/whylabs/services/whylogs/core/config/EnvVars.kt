@@ -5,6 +5,7 @@ import ai.whylabs.services.whylogs.core.writer.S3Writer
 import ai.whylabs.services.whylogs.core.writer.WhyLabsWriter
 import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
+import java.time.Duration
 import java.time.temporal.ChronoUnit
 
 enum class WriteLayer {
@@ -18,9 +19,25 @@ enum class WriterTypes {
 
 enum class ProfileWritePeriod(val chronoUnit: ChronoUnit?) {
     MINUTES(ChronoUnit.MINUTES),
+    FIVE_MINUTES(null),
+    TEN_MINUTES(null),
+    THIRTY_MINUTES(null),
     HOURS(ChronoUnit.HOURS),
     DAYS(ChronoUnit.DAYS),
-    ON_DEMAND(null)
+    ON_DEMAND(null);
+
+    fun asDuration(): Duration {
+        return when (this) {
+            FIVE_MINUTES -> return Duration.of(5, ChronoUnit.MINUTES)
+            TEN_MINUTES -> return Duration.of(10, ChronoUnit.MINUTES)
+            THIRTY_MINUTES -> return Duration.of(30, ChronoUnit.MINUTES)
+            ON_DEMAND -> return Duration.of(1000, ChronoUnit.DAYS)
+
+            MINUTES -> return Duration.of(1, ChronoUnit.MINUTES)
+            HOURS -> return Duration.of(1, ChronoUnit.HOURS)
+            DAYS -> return Duration.of(1, ChronoUnit.DAYS)
+        }
+    }
 }
 
 interface IEnvVars {
