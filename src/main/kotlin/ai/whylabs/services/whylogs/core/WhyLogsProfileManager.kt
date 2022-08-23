@@ -20,7 +20,6 @@ import ai.whylabs.services.whylogs.util.message
 import com.whylogs.core.DatasetProfile
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -122,17 +121,24 @@ class WhyLogsProfileManager(
         }
 
         logger.info("Using time unit: {}", chronoUnit)
+        logger.info("Using upload cadence : {}", envVars.profileWritePeriod)
         val nextRun = currentTime.plus(1, chronoUnit).truncatedTo(chronoUnit)
-        val initialDelay = nextRun.epochSecond - currentTime.epochSecond
         logger.info("Starting profile manager using time unit: {}", chronoUnit)
         windowStartTimeState = currentTime.truncatedTo(chronoUnit)
         logger.info("Starting with initial window: {}", windowStartTimeState)
 
         if (envVars.profileWritePeriod != ProfileWritePeriod.ON_DEMAND) {
+            // Align the upload cadence with the upload time if  they're the same
+            val initialDelay = if (envVars.profileWritePeriod.name == chronoUnit.name) {
+                nextRun.epochSecond - currentTime.epochSecond
+            } else {
+                0
+            }
+
             executorService.scheduleWithFixedDelay(
                 this::rotate,
                 initialDelay,
-                Duration.of(1, envVars.profileWritePeriod.chronoUnit).seconds,
+                envVars.profileWritePeriod.asDuration().seconds,
                 TimeUnit.SECONDS
             )
         }
