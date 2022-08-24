@@ -26,12 +26,12 @@ enum class ProfileWritePeriod(val chronoUnit: ChronoUnit?) {
     DAYS(ChronoUnit.DAYS),
     ON_DEMAND(null);
 
-    fun asDuration(): Duration {
+    fun asDuration(): Duration? {
         return when (this) {
             FIVE_MINUTES -> return Duration.of(5, ChronoUnit.MINUTES)
             TEN_MINUTES -> return Duration.of(10, ChronoUnit.MINUTES)
             THIRTY_MINUTES -> return Duration.of(30, ChronoUnit.MINUTES)
-            ON_DEMAND -> return Duration.of(1000, ChronoUnit.DAYS)
+            ON_DEMAND -> return null
 
             MINUTES -> return Duration.of(1, ChronoUnit.MINUTES)
             HOURS -> return Duration.of(1, ChronoUnit.HOURS)
