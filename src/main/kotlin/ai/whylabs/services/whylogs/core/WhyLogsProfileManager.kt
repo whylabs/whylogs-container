@@ -3,7 +3,6 @@ package ai.whylabs.services.whylogs.core
 import ai.whylabs.service.invoker.ApiException
 import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
-import ai.whylabs.services.whylogs.core.config.ProfileWritePeriod
 import ai.whylabs.services.whylogs.core.config.WriteLayer
 import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMap
@@ -127,7 +126,7 @@ class WhyLogsProfileManager(
         windowStartTimeState = currentTime.truncatedTo(chronoUnit)
         logger.info("Starting with initial window: {}", windowStartTimeState)
 
-        if (envVars.profileWritePeriod != ProfileWritePeriod.ON_DEMAND) {
+        envVars.profileWritePeriod.asDuration()?.let { uploadCadence ->
             // Align the upload cadence with the upload time if  they're the same
             val initialDelay = if (envVars.profileWritePeriod.name == chronoUnit.name) {
                 nextRun.epochSecond - currentTime.epochSecond
@@ -138,7 +137,7 @@ class WhyLogsProfileManager(
             executorService.scheduleWithFixedDelay(
                 this::rotate,
                 initialDelay,
-                envVars.profileWritePeriod.asDuration().seconds,
+                uploadCadence.seconds,
                 TimeUnit.SECONDS
             )
         }
