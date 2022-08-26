@@ -54,7 +54,7 @@ private fun uploadToUrl(url: String, profile: DatasetProfile) {
     connection.requestMethod = "PUT"
 
     connection.outputStream.use { out ->
-        profile.toProtobuf().build().writeTo(out)
+        profile.toProtobuf().build().writeDelimitedTo(out)
     }
 
     if (connection.responseCode != 200) {
