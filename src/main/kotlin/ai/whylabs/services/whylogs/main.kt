@@ -54,12 +54,9 @@ fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
             ctx.json(e.message ?: "Bad Request").status(400)
         }
         routes {
-            path("logs") {
-                post(whylogs::track)
-            }
-            path("writeProfiles") {
-                post(whylogs::writeProfiles)
-            }
+            path("logs") { post(whylogs::track) }
+            path("writeProfiles") { post(whylogs::writeProfiles) }
+            path("logDebugInfo") { post(whylogs::logDebugInfo) }
         }
         after("logs", whylogs::after)
         // TODO make a call to list models to test the api key on startup as a health check

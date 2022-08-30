@@ -22,11 +22,17 @@ enum class EnvVarNames(private val default: String? = null) {
     // container.profile_storage_mode
     PROFILE_STORAGE_MODE(WriteLayer.IN_MEMORY.name),
 
+    // container.file_system_writer_root
     FILE_SYSTEM_WRITER_ROOT("whylogs-profiles"),
 
     /**
-     * A JSON list of keys that should be ignored in Kafka data messages.
+     * A JSON list of keys that should be ignored when logging. If any of the columns of data messages
+     * match these keys then they won't be logged. Useful to avoid having to strip out data as
+     * a preprocessing step. If the container is running in Kafka mode then you can use this to avoid having
+     * to strip keys out of messages. If you're using the REST interface then any of the columns in the single
+     * or multiple will be dropped if they match any of the ones in here.
      */
+    // container.ignored_keys
     IGNORED_KEYS("[]"),
 
     //

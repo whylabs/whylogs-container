@@ -58,6 +58,26 @@ jobs:
           name: container
           path: /tmp/whylogs-container.tar
 
+  preview-docs:
+    name: Generate a preview of the docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build docs
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: dokkaHtml
+
+      - name: "Deploy to Netlify"
+        uses: nwtgck/actions-netlify@v1.2
+        with:
+          publish-dir: build/dokka/html/
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        timeout-minutes: 1
+
   publish_docker_image:
     name: Publish the Docker image to Docker Hub
     if: ${{ !github.event.act && github.event_name == 'push' }}

@@ -5,6 +5,7 @@ import ai.whylabs.services.whylogs.core.writer.S3Writer
 import ai.whylabs.services.whylogs.core.writer.WhyLabsWriter
 import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
+import com.fasterxml.jackson.annotation.JsonIgnore
 import java.time.Duration
 import java.time.temporal.ChronoUnit
 
@@ -67,11 +68,8 @@ interface IEnvVars {
 
     val s3Prefix: String
     val s3Bucket: String
-
     val port: Int
     val debug: Boolean
-
-    // TODO aggregate the other options into namespaces like this
     val kafkaConfig: KafkaConfig?
 
     /**
@@ -82,6 +80,7 @@ interface IEnvVars {
      */
     val profileWritePeriod: ProfileWritePeriod
 
+    @JsonIgnore
     fun getProfileWriter(): Writer {
         return when (this.writer) {
             WriterTypes.S3 -> S3Writer(this)
@@ -111,7 +110,7 @@ class EnvVars private constructor() : IEnvVars {
     override val requestQueueProcessingIncrement = parseQueueIncrement()
 
     override val whylabsApiKey = EnvVarNames.WHYLABS_API_KEY.requireIf(writer == WriterTypes.WHYLABS)
-    override val expectedApiKey = EnvVarNames.CONTAINER_API_KEY.require()
+    override val expectedApiKey = EnvVarNames.CONTAINER_API_KEY.require().trim()
 
     // Just use a single writer until we get requests otherwise to simplify the error handling logic
     override val s3Prefix = EnvVarNames.S3_PREFIX.requireIf(writer == WriterTypes.S3)

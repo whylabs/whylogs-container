@@ -1,5 +1,7 @@
 package ai.whylabs.services.whylogs.kafka
 
+import ai.whylabs.services.whylogs.core.DebugInfoManager
+import ai.whylabs.services.whylogs.core.DebugInfoMessage
 import ai.whylabs.services.whylogs.core.LogRequest
 import ai.whylabs.services.whylogs.core.WhyLogsProfileManager
 import ai.whylabs.services.whylogs.core.config.IEnvVars
@@ -10,7 +12,11 @@ import org.slf4j.LoggerFactory
 
 private val log = LoggerFactory.getLogger(KafkaConfig::class.java)
 
-class ConsumerController(private val envConfig: IEnvVars, private val profileManager: WhyLogsProfileManager) {
+class ConsumerController(
+    private val envConfig: IEnvVars,
+    private val profileManager: WhyLogsProfileManager,
+    private val debugInfo: DebugInfoManager = DebugInfoManager.instance,
+) {
     // This class shouldn't be created if kafka isn't configured
     private val kafkaConfig = envConfig.kafkaConfig ?: throw IllegalStateException("Kafka is disabled in the config. Not making consumer.")
 
@@ -26,7 +32,6 @@ class ConsumerController(private val envConfig: IEnvVars, private val profileMan
     }
 
     private suspend fun process(record: KafkaRecord<String, Map<String, Any>>): Boolean {
-
         val topic = record.rawRecord.topic()
         val datasetId = if (envConfig.writer == WriterTypes.WHYLABS) {
             kafkaConfig.datasetIds[topic] ?: throw IllegalStateException("Don't know which whylabs dataset id to use for topic $topic")
@@ -45,6 +50,7 @@ class ConsumerController(private val envConfig: IEnvVars, private val profileMan
         return try {
             profileManager.handle(request)
             profileManager.mergePending()
+            debugInfo.send(DebugInfoMessage.KafkaMessagesHandledMessage())
             true
         } catch (t: Throwable) {
             log.error("Error while processing kafka.", t)
