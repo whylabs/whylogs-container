@@ -15,6 +15,9 @@ build-docker:build ## Build the service code into a docker container as whylabs/
 run: ## Run the service code locally without Docker.
 	./gradlew run
 
+docs: ## Generate dakka documentation
+	./gradlew dokkaHtml
+
 debug: ## Run the service in debug mode so you can connect to it via remote JVM debugger.
 	./gradlew run --debug-java
 

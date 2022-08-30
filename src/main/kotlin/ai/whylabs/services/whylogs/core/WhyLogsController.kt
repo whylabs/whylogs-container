@@ -27,11 +27,13 @@ const val OrgIdTag = "orgId"
 class WhyLogsController(
     private val envVars: IEnvVars = EnvVars.instance,
     private val profileManager: WhyLogsProfileManager = WhyLogsProfileManager(envVars = envVars),
+    private val debugInfo: DebugInfoManager = DebugInfoManager.instance
+
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     fun preprocess(ctx: Context) {
-        val apiKey = ctx.header(apiKeyHeader)
+        val apiKey = ctx.header(apiKeyHeader)?.trim()
 
         if (apiKey != envVars.expectedApiKey) {
             logger.warn("Dropping request because of invalid API key")
@@ -145,6 +147,7 @@ Here is an example from the output above
 
             runBlocking {
                 profileManager.handle(processedRequest)
+                debugInfo.send(DebugInfoMessage.RestLogCalledMessage())
             }
         } catch (t: MismatchedInputException) {
             logger.warn("Invalid request format", t)
@@ -182,6 +185,19 @@ Here is an example from the output above
             ctx.json(response)
         }
     }
+
+    @OpenApi(
+        headers = [OpenApiParam(name = apiKeyHeader, required = true)],
+        method = HttpMethod.POST,
+        summary = "Trigger debugging info to be logged.",
+        operationId = "logDebugInfo",
+        tags = ["whylogs"],
+        responses = [
+            OpenApiResponse("200"),
+            OpenApiResponse("500", description = "Something unexpected went wrong.")
+        ]
+    )
+    fun logDebugInfo(ctx: Context) = runBlocking { debugInfo.send(DebugInfoMessage.LogMessage) }
 
     private fun return400(ctx: Context, message: String) {
         ctx.res.status = 400

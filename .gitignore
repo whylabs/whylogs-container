@@ -67,3 +67,6 @@ fabric.properties
 /.run/
 *.env
 whylogs-profiles
+
+# Local Netlify folder
+.netlify

@@ -1,5 +1,6 @@
 package ai.whylabs.services.whylogs.core
 
+import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.core.config.ProfileWritePeriod
 import ai.whylabs.services.whylogs.core.config.WriteLayer
@@ -8,6 +9,8 @@ import ai.whylabs.services.whylogs.core.writer.WriteResult
 import ai.whylabs.services.whylogs.core.writer.Writer
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
 import com.whylogs.core.DatasetProfile
+import io.mockk.every
+import io.mockk.mockkObject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
@@ -45,30 +48,34 @@ private class WhyLabsEnvVars : IEnvVars {
 class WhyLogsProfileManagerTest {
 
     lateinit var manager: WhyLogsProfileManager
+    lateinit var profileStore: ProfileStore
 
     @BeforeEach
     fun init() = runBlocking {
+        mockkObject(EnvVars)
+        every { EnvVars.instance } returns WhyLabsEnvVars()
+        profileStore = ProfileStore(
+            sessionId = sessionId,
+        )
         manager = WhyLogsProfileManager(
             currentTime = Instant.ofEpochMilli(1),
             writer = FakeWriter(),
-            orgId = orgId,
-            sessionId = sessionId,
+            profileStore = profileStore,
             writeOnStop = false,
-            envVars = WhyLabsEnvVars()
         )
     }
 
     @AfterEach
     fun after() = runBlocking {
         // Clear out any cached entries since this uses a real sqlite backend.
-        manager.profiles.map.reset {
+        profileStore.profiles.map.reset {
             emptyMap()
         }
     }
 
     @Test
     fun `buffered items merge into the map correctly`() = runBlocking {
-        val bufferedMap = manager.profiles
+        val bufferedMap = profileStore.profiles
         val (a) = createTestData()
         val (_, request) = a
 
@@ -120,14 +127,14 @@ class WhyLogsProfileManagerTest {
         }
 
         // Make sure its not in the queue anymore
-        manager.config.queue.pop(PopSize.All) {
+        profileStore.config.queue.pop(PopSize.All) {
             Assertions.assertEquals(0, it.size, "Should have nothing left to pop")
         }
     }
 
     @Test
     fun `profiles are stored separately if they have different tags and modeles`() = runBlocking {
-        val bufferedMap = manager.profiles
+        val bufferedMap = profileStore.profiles
 
         val (a, b, c, d) = createTestData()
         val (expectedKeyA, requestA, profileA) = a
@@ -201,7 +208,7 @@ class WhyLogsProfileManagerTest {
         }
 
         // Make sure its not in the queue anymore
-        manager.config.queue.pop(PopSize.All) {
+        profileStore.config.queue.pop(PopSize.All) {
             Assertions.assertEquals(0, it.size, "Should have nothing left to pop")
         }
     }

@@ -2,19 +2,35 @@ package ai.whylabs.services.whylogs
 
 import ai.whylabs.services.whylogs.core.LogRequest
 import ai.whylabs.services.whylogs.core.MultiLog
+import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.core.config.ProfileWritePeriod
 import ai.whylabs.services.whylogs.core.config.WriteLayer
 import ai.whylabs.services.whylogs.core.config.WriterTypes
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
+import io.mockk.every
+import io.mockk.mockkObject
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 class SmokeTests {
-    private val client = TestClient(TestEnvVars())
+
+    companion object {
+        private lateinit var client: TestClient
+
+        @BeforeAll
+        @JvmStatic
+        fun init() {
+            mockkObject(EnvVars)
+            val env = TestEnvVars()
+            every { EnvVars.instance } returns env
+            client = TestClient(env)
+        }
+    }
 
     @Test
     fun `writing profiles works`() = runBlocking {

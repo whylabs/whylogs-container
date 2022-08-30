@@ -29,6 +29,17 @@ class PersistentMap<K, V>(options: MapMessageHandlerOptions<K, V>) {
     }
 
     /**
+     * Get the number of entries.
+     */
+    suspend fun size(): Int {
+        return withContext(scope.coroutineContext) {
+            val done = CompletableDeferred<Int>()
+            act.send(PersistentMapMessage.SizeMessage(done))
+            done.await()
+        }
+    }
+
+    /**
      * Set a value for the given key.
      * @param block A block that will be passed the current value for the key. The
      * value that this block returns will be used as the new value for the key. Returning

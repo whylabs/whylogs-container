@@ -16,25 +16,26 @@ import org.slf4j.LoggerFactory
 private val logger = LoggerFactory.getLogger("queueActor")
 private const val defaultTimeoutMs = 10_000L
 
-internal sealed class PersistentMapMessage<K, V>(val done: CompletableDeferred<V?>) {
+internal sealed class PersistentMapMessage<K, V>(open val done: CompletableDeferred<*>) {
 
-    class GetMessage<K, V>(done: CompletableDeferred<V?>, val key: K) : PersistentMapMessage<K, V>(done)
+    class GetMessage<K, V>(override val done: CompletableDeferred<V?>, val key: K) : PersistentMapMessage<K, V>(done)
+    class SizeMessage<K, V>(override val done: CompletableDeferred<Int>) : PersistentMapMessage<K, V>(done)
 
     class SetMessage<K, V>(
-        done: CompletableDeferred<V?>,
+        override val done: CompletableDeferred<V?>,
         val key: K,
         val currentItem: CompletableDeferred<V?>,
         val processingDone: CompletableDeferred<V?>,
     ) : PersistentMapMessage<K, V>(done)
 
     class ResetMessage<K, V>(
-        done: CompletableDeferred<V?>,
+        override val done: CompletableDeferred<V?>,
         val everything: CompletableDeferred<Map<K, V>>,
         val processingDone: CompletableDeferred<Map<K, V>>,
     ) : PersistentMapMessage<K, V>(done)
 
     class ProcessMessage<K, V>(
-        done: CompletableDeferred<V?>,
+        override val done: CompletableDeferred<V?>,
         val current: SendChannel<Pair<K, V>>,
         val updated: ReceiveChannel<Pair<K, V>?>,
         val timeoutMs: Long? = null,
@@ -66,6 +67,7 @@ internal fun <K, V> CoroutineScope.mapMessageHandler(options: MapMessageHandlerO
                         is PersistentMapMessage.SetMessage<K, V> -> set(options, msg)
                         is PersistentMapMessage.ResetMessage<K, V> -> reset(options, msg)
                         is PersistentMapMessage.ProcessMessage<K, V> -> process(options, msg)
+                        is PersistentMapMessage.SizeMessage<K, V> -> size(options, msg)
                     }
                 } catch (t: Throwable) {
                     logger.error("Error handling message ${msg.javaClass}", t)
@@ -75,12 +77,28 @@ internal fun <K, V> CoroutineScope.mapMessageHandler(options: MapMessageHandlerO
         }
     }
 
+private suspend fun <K, V> size(
+    options: MapMessageHandlerOptions<K, V>,
+    message: PersistentMapMessage.SizeMessage<K, V>
+) {
+    withTimeout(defaultTimeoutMs) {
+        logger.debug("Logging size")
+
+        val size = options.retryIfEnabled {
+            options.writeLayer.size()
+        }
+
+        logger.debug("Done logging size")
+        message.done.complete(size)
+    }
+}
+
 private suspend fun <K, V> get(
     options: MapMessageHandlerOptions<K, V>,
     message: PersistentMapMessage.GetMessage<K, V>
 ) {
     withTimeout(defaultTimeoutMs) {
-        logger.debug("Getting item $message.key")
+        logger.debug("Getting item {}", message.key)
 
         val item = options.retryIfEnabled {
             options.writeLayer.get(message.key)
@@ -182,7 +200,7 @@ private suspend fun <K, V> process(
 
             // Wait for the new value to pop out
             withTimeout(message.timeoutMs ?: defaultTimeoutMs) {
-                logger.debug("Waiting for updated item for ${entry.key}")
+                logger.debug("Waiting for updated item for {}", entry.key)
                 val updatedValue = message.updated.receive()
                 if (updatedValue != null) {
                     // update the key if it's not null

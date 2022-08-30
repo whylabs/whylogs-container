@@ -57,7 +57,7 @@ class S3Writer(private val envVars: IEnvVars = EnvVars.instance) : Writer {
             return WriteResult("s3", "s3://${envVars.s3Bucket}/$key")
         } catch (t: Throwable) {
             logger.error("Failed to upload profile to s3", t)
-            throw t // TODO why didn't I throw these before?
+            throw t
         }
     }
 }

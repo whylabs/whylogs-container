@@ -3,25 +3,13 @@ package ai.whylabs.services.whylogs.core
 import ai.whylabs.service.invoker.ApiException
 import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
-import ai.whylabs.services.whylogs.core.config.WriteLayer
 import ai.whylabs.services.whylogs.core.writer.Writer
-import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMap
-import ai.whylabs.services.whylogs.persistent.QueueBufferedPersistentMapConfig
-import ai.whylabs.services.whylogs.persistent.map.InMemoryMapWriteLayer
-import ai.whylabs.services.whylogs.persistent.map.MapMessageHandlerOptions
 import ai.whylabs.services.whylogs.persistent.map.PersistentMap
-import ai.whylabs.services.whylogs.persistent.map.SqliteMapWriteLayer
-import ai.whylabs.services.whylogs.persistent.queue.InMemoryQueueWriteLayer
-import ai.whylabs.services.whylogs.persistent.queue.PersistentQueue
-import ai.whylabs.services.whylogs.persistent.queue.QueueOptions
-import ai.whylabs.services.whylogs.persistent.queue.SqliteQueueWriteLayer
 import ai.whylabs.services.whylogs.util.message
-import com.whylogs.core.DatasetProfile
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -31,84 +19,13 @@ class WhyLogsProfileManager(
     currentTime: Instant = Instant.now(), // TODO this needs to be configurable and included on disk somehow for integ tests
     private val envVars: IEnvVars = EnvVars.instance,
     private val writer: Writer = envVars.getProfileWriter(),
-    private val orgId: String = envVars.orgId,
-    private val sessionId: String = UUID.randomUUID().toString(),
+    private val debugInfo: DebugInfoManager = DebugInfoManager.instance,
+    private val profileStore: ProfileStore = ProfileStore.instance,
     writeOnStop: Boolean = true,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val sessionTimeState = currentTime
     private val chronoUnit: ChronoUnit = envVars.whylogsPeriod
-
-    private val queue = PersistentQueue(
-        QueueOptions(
-            queueWriteLayer = when (envVars.requestQueueingMode) {
-                WriteLayer.IN_MEMORY -> {
-                    logger.info("Using InMemoryWriteLayer for request queue.")
-                    InMemoryQueueWriteLayer()
-                }
-                WriteLayer.SQLITE -> {
-                    logger.info("Using SqliteQueueWriteLayer for request queue.")
-                    SqliteQueueWriteLayer("pending-requests", LogRequestSerializer())
-                }
-            }
-        )
-    )
-
-    private val map = PersistentMap(
-        MapMessageHandlerOptions(
-            when (envVars.profileStorageMode) {
-                WriteLayer.IN_MEMORY -> {
-                    logger.info("Using InMemoryWriteLayer for profile store.")
-                    InMemoryMapWriteLayer()
-                }
-                WriteLayer.SQLITE -> {
-                    logger.info("Using SqliteQueueWriteLayer for profile store.")
-                    SqliteMapWriteLayer(
-                        "dataset-profiles",
-                        ProfileKeySerializer(),
-                        ProfileEntrySerializer()
-                    )
-                }
-            }
-        )
-    )
-
-    internal val config = QueueBufferedPersistentMapConfig(
-        queue = queue,
-        map = map,
-        buffer = envVars.requestQueueingEnabled,
-        defaultValue = { profileKey ->
-            ProfileEntry(
-                profile = DatasetProfile(
-                    sessionId,
-                    profileKey.sessionTime,
-                    profileKey.windowStartTime,
-                    profileKey.normalizedTags.toMap() + mapOf(
-                        DatasetIdTag to profileKey.datasetId,
-                        OrgIdTag to profileKey.orgId
-                    ),
-                    mapOf()
-                ),
-                orgId = profileKey.orgId,
-                datasetId = profileKey.datasetId
-            )
-        },
-        groupByBlock = { bufferedLogRequest ->
-            ProfileKey.fromTags(
-                orgId,
-                bufferedLogRequest.request.datasetId,
-                bufferedLogRequest.request.tags ?: emptyMap(),
-                bufferedLogRequest.sessionTime,
-                bufferedLogRequest.windowStartTime
-            )
-        },
-        mergeBlock = { profile, logRequest ->
-            profile.profile.merge(logRequest.request, envVars.ignoredKeys)
-            profile
-        }
-    )
-
-    internal val profiles = QueueBufferedPersistentMap(config)
 
     @Volatile
     private var windowStartTimeState: Instant
@@ -152,7 +69,7 @@ class WhyLogsProfileManager(
     }
 
     suspend fun handle(request: LogRequest) {
-        profiles.merge(
+        profileStore.profiles.merge(
             BufferedLogRequest(
                 request = request,
                 sessionTime = sessionTimeState,
@@ -162,7 +79,7 @@ class WhyLogsProfileManager(
     }
 
     suspend fun mergePending() {
-        profiles.mergeBuffered(envVars.requestQueueProcessingIncrement)
+        profileStore.profiles.mergeBuffered(envVars.requestQueueProcessingIncrement)
     }
 
     private fun stop() = runBlocking {
@@ -210,7 +127,8 @@ class WhyLogsProfileManager(
     internal suspend fun writeOutProfiles(): WriteProfilesResult {
         val profilePaths = mutableListOf<String>()
         var profilesWritten = 0
-        profiles.map.process { current ->
+        debugInfo.send(DebugInfoMessage.ProfileWriteAttemptMessage())
+        profileStore.profiles.map.process { current ->
             val (key, profileEntry) = current
             logger.info("Writing out profiles for tags: {}", key)
 
@@ -220,6 +138,7 @@ class WhyLogsProfileManager(
                     profilesWritten++
                 }
 
+                debugInfo.send(DebugInfoMessage.ProfileWrittenMessage())
                 PersistentMap.ProcessResult.Success()
             } catch (e: ApiException) {
                 logger.error(e.message("Keeping profile $key to try later."), e)
