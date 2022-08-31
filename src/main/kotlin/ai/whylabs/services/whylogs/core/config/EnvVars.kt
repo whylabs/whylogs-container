@@ -120,7 +120,7 @@ class EnvVars private constructor() : IEnvVars {
     override val profileWritePeriod = ProfileWritePeriod.valueOf(EnvVarNames.PROFILE_WRITE_PERIOD.get() ?: whylogsPeriod.name)
 
     override val port = EnvVarNames.PORT.getOrDefault().toInt()
-    override val debug = EnvVarNames.DEBUG.getOrDefault().toBoolean()
+    override val debug = false
 
     companion object {
         val instance: IEnvVars by lazy { EnvVars() }

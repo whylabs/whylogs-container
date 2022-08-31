@@ -19,9 +19,17 @@ enum class EnvVarNames(private val default: String? = null) {
     // container.api_key
     CONTAINER_API_KEY,
 
+    /**
+     * Controls the data structure that stores the profiles before they get
+     * uploaded. By default, [WriteLayer.IN_MEMORY] will use an in memory map.
+     */
     // container.profile_storage_mode
     PROFILE_STORAGE_MODE(WriteLayer.IN_MEMORY.name),
 
+    /**
+     * Only applies when [UPLOAD_DESTINATION] is set to [WriterTypes.DEBUG_FILE_SYSTEM].
+     * Controls the dir that whylogs profiles are written to, relative to the local dir.
+     */
     // container.file_system_writer_root
     FILE_SYSTEM_WRITER_ROOT("whylogs-profiles"),
 
@@ -51,6 +59,11 @@ enum class EnvVarNames(private val default: String? = null) {
      * Used to determine where profiles are uploaded to.
      * Must be a string value of [WriterTypes]. Other config values become
      * required depending on the value of this.
+     *
+     * - [WriterTypes.WHYLABS] causes the container to upload profiles to whylabs.
+     * - [WriterTypes.S3] causes the container to upload profiles to s3.
+     * - [WriterTypes.DEBUG_FILE_SYSTEM] causes the container to upload profiles to disk.
+     *   This was developed mostly as a debugging tool.
      */
     // upload.destination
     UPLOAD_DESTINATION(WriterTypes.WHYLABS.name),
@@ -97,7 +110,8 @@ enum class EnvVarNames(private val default: String? = null) {
 
     /**
      * The period to use for log rotation. This can be HOURLY, DAILY.
-     * This determines how data is grouped into profiles.
+     * This determines how data is grouped into profiles. If you're using
+     * WhyLabs then this should match the model's type.
      */
     // whylogs.period
     WHYLOGS_PERIOD,
@@ -106,80 +120,104 @@ enum class EnvVarNames(private val default: String? = null) {
     /**
      * A JSON formatted list of host:port servers.
      * See https://kafka.apache.org/documentation/#consumerconfigs_bootstrap.servers
-     * Example: ["http://localhost:9093"]
+     * Example: ["http://localhost:9092"]
      */
     // kafka.bootstrap_servers
     KAFKA_BOOTSTRAP_SERVERS,
 
     /**
      * See https://kafka.apache.org/documentation/#consumerconfigs_group.id
+     * The container will have a single group id for all the consumers.
      */
     // kafka.group_id
     KAFKA_GROUP_ID,
 
     /**
      * Set this to true if you want the container to use its kafka config.
+     * By default, none of the Kafka options do anything.
      */
     // kafka.enabled
     KAFKA_ENABLED("false"),
 
     /**
-     * A JSON formatted list of topic names to consume.
+     * A JSON formatted list of topic names to consume. The full list is
+     * subscribed to by each of the consumers.
      */
     // kafka.topics
     KAFKA_TOPICS("[]"),
 
     /**
-     * A JSON map that maps kafka topic to a whylabs dataset id.
+     * A JSON map that maps kafka topics to a whylabs dataset id. Applies when
+     * [UPLOAD_DESTINATION] is set to [WriterTypes.WHYLABS].
      */
     // kafka.dataset_ids
     KAFKA_TOPIC_DATASET_IDS("{}"),
 
     /**
-     * How to treat nested values in Kafka data messages. Will either include nested values by
+     * How to treat nested values in Kafka JSON data messages. Will either include nested values by
      * concatenating keys with "." or it will ignore the entire value.
      */
+    // kafka.message_nesting_behavior
     KAFKA_MESSAGE_NESTING_BEHAVIOR(KafkaNestingBehavior.Flatten.name),
 
     /**
      * Number of consumer threads to start up. If you dedicate 3 threads to
      * consumers then there will be three separate threads dedicated to three consumers
      * that independently poll Kafka. If you want to dedicate an entire container to a
-     * single consumer then you would put this value to 1.
+     * single consumer then you would put this value to 1. The ideal value depends on
+     * use case, Kafka cluster configuration, and the hardware used to host the
+     * container. Having a thread count == your topic partition count is reasonable.
+     * If you have more threads than your partitions then the extra ones will
+     * just be idle.
+     *
+     * Just keep in mind that messages in a topic partition are FIFO, so you won't get
+     * benefit if your topic only has a single partition.
      */
+    // kafka.consumer_threads
     KAFKA_CONSUMER_THREADS("1"),
 
     // REST stuff
     /**
-     * The request queueing backend to use for the REST service.
-     * This is a throughput optimization to decouple some processing we need to
-     * do to requests from the total request time for callers. Should be one of
-     * [RequestQueueingMode]. Choosing [RequestQueueingMode.SQLITE] will be more
-     * durable at the cost of performance when compared with [RequestQueueingMode.IN_MEMORY].
-     * You should only consider changing this if you need more throughput and you
-     * don't want to scale the container horizontally.
+     * Only applies if [REQUEST_QUEUEING_ENABLED] is `true`.
+     * That queue can be backed by in memory data structures or sqlite.
+     * See [REQUEST_QUEUEING_ENABLED] for more info.
      */
     // rest.queueing_mode
     REQUEST_QUEUEING_MODE(WriteLayer.IN_MEMORY.name),
 
+    /**
+     * An optimization that decouples the request from the request handling.
+     * This will make each request finish faster from the caller's perspective
+     * by queueing the requests to be handled asap, rather than handling them
+     * while the caller waits. This isn't that useful when using the default
+     * `PROFILE_STORAGE_MODE=IN_MEMORY` since the request handling is pretty fast
+     * already. It was added to make `PROFILE_STORAGE_MODE=SQLITE` faster since
+     * there is af air bit of IO for each request. You probably don't need to
+     * change this.
+     */
     // rest.request_queueing_enabled
     REQUEST_QUEUEING_ENABLED("false"),
 
     /**
-     * Port to use for the rest service.
+     * Port to use for the REST service.
      */
     // rest.port
     PORT("8080"),
 
     // Dev stuff
-    /**
-     * Dev option to enable verbose logging.
-     * TODO make this work
-     */
-    // dev.debug
-    DEBUG("false"),
+//    /**
+//     * Dev option to enable verbose logging.
+//     * TODO make this work
+//     */
+//    // dev.debug
+//    DEBUG("false"),
 
-    // Reserved, not yet exposed
+    /**
+     * A fairly obscure/advanced tuning knob that only applies to the REST
+     * calls when [REQUEST_QUEUEING_ENABLED] is `true`. You probably don't
+     * want to set this.
+     */
+    // rest.request_queue_processing_increment
     REQUEST_QUEUE_PROCESSING_INCREMENT;
 
     fun get(): String? {
