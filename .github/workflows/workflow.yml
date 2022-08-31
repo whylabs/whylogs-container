@@ -78,6 +78,29 @@ jobs:
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         timeout-minutes: 1
 
+  publish-docs:
+    name: Push generated docs to the docs repo
+    if: ${{ !github.event.act && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build docs
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: dokkaHtml
+
+      - name: Push docs to the doc repo
+        uses: cpina/github-action-push-to-another-repository@main
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.WHYLOGS_CONTAINER_DOCS_SSH}}
+        with:
+          source-directory: 'build/dokka/html/'
+          destination-github-username: 'whylabs'
+          destination-repository-name: 'whylogs-container-docs'
+          user-email: github-build@whylabs.ai
+          target-branch: master
+
   publish_docker_image:
     name: Publish the Docker image to Docker Hub
     if: ${{ !github.event.act && github.event_name == 'push' }}
