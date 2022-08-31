@@ -60,6 +60,7 @@ jobs:
 
   preview-docs:
     name: Generate a preview of the docs
+    if: ${{ !github.event.act && github.event_name != 'push' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -80,7 +81,8 @@ jobs:
 
   publish-docs:
     name: Push generated docs to the docs repo
-    # if: ${{ !github.event.act && github.event_name == 'push' }}
+    if: ${{ !github.event.act && github.event_name == 'push' }}
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

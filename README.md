@@ -1,4 +1,5 @@
 Image on [Docker Hub](https://hub.docker.com/repository/docker/whylabs/whylogs)
+Docs on [Github Pages](https://whylabs.github.io/whylogs-container-docs)
 
 ## Before Pushing
 
