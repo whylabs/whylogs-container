@@ -80,7 +80,7 @@ jobs:
 
   publish-docs:
     name: Push generated docs to the docs repo
-    if: ${{ !github.event.act && github.event_name == 'push' }}
+    # if: ${{ !github.event.act && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
