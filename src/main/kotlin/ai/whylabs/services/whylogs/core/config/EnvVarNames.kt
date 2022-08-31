@@ -1,12 +1,17 @@
 package ai.whylabs.services.whylogs.core.config
 
-enum class EnvVarNames(private val default: String? = null) {
+/**
+ * @property default The default value.
+ */
+enum class EnvVarNames(val default: String? = null) {
     /**
-     * A JSON formatted list of string model ids. All of the model
+     * A JSON formatted list of string model ids. All the model
      * ids in this list will have profiles delivered for them regardless
-     * of whether or not any data was sent to the container for them. This
+     * of whether any data was sent to the container for them. This
      * is useful to differentiate container issues from legitimately not
      * receiving data.
+     *
+     * Defaults to `[]`
      */
     // container.empty_dataset_ids
     EMPTY_PROFILE_DATASET_IDS("[]"),
@@ -15,6 +20,8 @@ enum class EnvVarNames(private val default: String? = null) {
      * A string password that the container requires for each request in
      * the `X-API-Key` header. This is a safeguard if you need to have
      * the container exposed to the internet or other untrusted sources.
+     *
+     * Required.
      */
     // container.api_key
     CONTAINER_API_KEY,
@@ -22,6 +29,8 @@ enum class EnvVarNames(private val default: String? = null) {
     /**
      * Controls the data structure that stores the profiles before they get
      * uploaded. By default, [WriteLayer.IN_MEMORY] will use an in memory map.
+     *
+     * Defaults to `IN_MEMORY`. One of [WriteLayer].
      */
     // container.profile_storage_mode
     PROFILE_STORAGE_MODE(WriteLayer.IN_MEMORY.name),
@@ -29,6 +38,8 @@ enum class EnvVarNames(private val default: String? = null) {
     /**
      * Only applies when [UPLOAD_DESTINATION] is set to [WriterTypes.DEBUG_FILE_SYSTEM].
      * Controls the dir that whylogs profiles are written to, relative to the local dir.
+     *
+     * Defaults to `whylogs-profiles`
      */
     // container.file_system_writer_root
     FILE_SYSTEM_WRITER_ROOT("whylogs-profiles"),
@@ -39,6 +50,8 @@ enum class EnvVarNames(private val default: String? = null) {
      * a preprocessing step. If the container is running in Kafka mode then you can use this to avoid having
      * to strip keys out of messages. If you're using the REST interface then any of the columns in the single
      * or multiple will be dropped if they match any of the ones in here.
+     *
+     * Defaults to `[]`
      */
     // container.ignored_keys
     IGNORED_KEYS("[]"),
@@ -51,6 +64,8 @@ enum class EnvVarNames(private val default: String? = null) {
      * How frequent the container should upload profiles. This defaults to the same cadence as the
      * model definition. For an hourly model, you'll upload profiles on an hourly basis. If this is set
      * to MINUTE then you'll upload profiles every minute.
+     *
+     * Defaults to whatever [WHYLOGS_PERIOD] is. One of [ProfileWritePeriod]
      */
     // upload.write_period
     PROFILE_WRITE_PERIOD,
@@ -64,6 +79,8 @@ enum class EnvVarNames(private val default: String? = null) {
      * - [WriterTypes.S3] causes the container to upload profiles to s3.
      * - [WriterTypes.DEBUG_FILE_SYSTEM] causes the container to upload profiles to disk.
      *   This was developed mostly as a debugging tool.
+     *
+     * Defaults to `WHYLABS`. One of [WriterTypes].
      */
     // upload.destination
     UPLOAD_DESTINATION(WriterTypes.WHYLABS.name),
@@ -71,6 +88,8 @@ enum class EnvVarNames(private val default: String? = null) {
     /**
      * The prefix to use for s3 uploads. Only  applies if configured
      * to upload to s3.
+     *
+     * Defaults to `""`
      */
     // upload.s3.prefix
     S3_PREFIX(""),
@@ -90,6 +109,8 @@ enum class EnvVarNames(private val default: String? = null) {
      * standing up a WhyLabs compatible endpoint that you can customize. We need
      * to document how to do that.
      * Only applies if configured for uploads to WhyLabs.
+     *
+     * Defaults to `https://api.whylabsapp.com`
      */
     // upload.whylabs.api_endpoint
     WHYLABS_API_ENDPOINT("https://api.whylabsapp.com"),
@@ -97,6 +118,8 @@ enum class EnvVarNames(private val default: String? = null) {
     /**
      * The id of your WhyLabs org. Only applies if configured for
      * uploads to WhyLabs.
+     *
+     * Required if [UPLOAD_DESTINATION] is [WriterTypes.WHYLABS].
      */
     // upload.whylabs.org_id
     ORG_ID,
@@ -104,6 +127,8 @@ enum class EnvVarNames(private val default: String? = null) {
     /**
      * A WhyLabs api key for your account.
      * Only applies if configured for uploads to WhyLabs.
+     *
+     * Required if [UPLOAD_DESTINATION] is [WriterTypes.WHYLABS].
      */
     // upload.whylabs.api_key
     WHYLABS_API_KEY,
@@ -112,6 +137,8 @@ enum class EnvVarNames(private val default: String? = null) {
      * The period to use for log rotation. This can be HOURLY, DAILY.
      * This determines how data is grouped into profiles. If you're using
      * WhyLabs then this should match the model's type.
+     *
+     * Required. One of [ProfileWritePeriod].
      */
     // whylogs.period
     WHYLOGS_PERIOD,
@@ -119,15 +146,19 @@ enum class EnvVarNames(private val default: String? = null) {
     // Kafka stuff
     /**
      * A JSON formatted list of host:port servers.
-     * See https://kafka.apache.org/documentation/#consumerconfigs_bootstrap.servers
-     * Example: ["http://localhost:9092"]
+     * See __[Kafka Bootstrap Servers](https://kafka.apache.org/documentation/#consumerconfigs_group.id)__
+     * Example: `["http://localhost:9092"]`
+     *
+     * Required when [KAFKA_ENABLED].
      */
     // kafka.bootstrap_servers
     KAFKA_BOOTSTRAP_SERVERS,
 
     /**
-     * See https://kafka.apache.org/documentation/#consumerconfigs_group.id
      * The container will have a single group id for all the consumers.
+     * See __[Kafka Group Ids](https://kafka.apache.org/documentation/#consumerconfigs_group.id)__
+     *
+     * Required when [KAFKA_ENABLED].
      */
     // kafka.group_id
     KAFKA_GROUP_ID,
@@ -135,13 +166,17 @@ enum class EnvVarNames(private val default: String? = null) {
     /**
      * Set this to true if you want the container to use its kafka config.
      * By default, none of the Kafka options do anything.
+     *
+     * Defaults to `false`
      */
     // kafka.enabled
     KAFKA_ENABLED("false"),
 
     /**
      * A JSON formatted list of topic names to consume. The full list is
-     * subscribed to by each of the consumers.
+     * subscribed to by each of the consumers. [EnvVarNames.KAFKA_TOPICS.default] huh
+     *
+     * Defaults to `[]`
      */
     // kafka.topics
     KAFKA_TOPICS("[]"),
@@ -149,6 +184,8 @@ enum class EnvVarNames(private val default: String? = null) {
     /**
      * A JSON map that maps kafka topics to a whylabs dataset id. Applies when
      * [UPLOAD_DESTINATION] is set to [WriterTypes.WHYLABS].
+     *
+     * Defaults to `{}`
      */
     // kafka.dataset_ids
     KAFKA_TOPIC_DATASET_IDS("{}"),
@@ -156,6 +193,8 @@ enum class EnvVarNames(private val default: String? = null) {
     /**
      * How to treat nested values in Kafka JSON data messages. Will either include nested values by
      * concatenating keys with "." or it will ignore the entire value.
+     *
+     * Defaults to `FLATTEN`. One of [KafkaNestingBehavior].
      */
     // kafka.message_nesting_behavior
     KAFKA_MESSAGE_NESTING_BEHAVIOR(KafkaNestingBehavior.Flatten.name),
@@ -172,6 +211,8 @@ enum class EnvVarNames(private val default: String? = null) {
      *
      * Just keep in mind that messages in a topic partition are FIFO, so you won't get
      * benefit if your topic only has a single partition.
+     *
+     * Defaults to `1`
      */
     // kafka.consumer_threads
     KAFKA_CONSUMER_THREADS("1"),
@@ -181,6 +222,8 @@ enum class EnvVarNames(private val default: String? = null) {
      * Only applies if [REQUEST_QUEUEING_ENABLED] is `true`.
      * That queue can be backed by in memory data structures or sqlite.
      * See [REQUEST_QUEUEING_ENABLED] for more info.
+     *
+     * Defaults to `IN_MEMORY`. One of [WriteLayer].
      */
     // rest.queueing_mode
     REQUEST_QUEUEING_MODE(WriteLayer.IN_MEMORY.name),
@@ -194,12 +237,16 @@ enum class EnvVarNames(private val default: String? = null) {
      * already. It was added to make `PROFILE_STORAGE_MODE=SQLITE` faster since
      * there is af air bit of IO for each request. You probably don't need to
      * change this.
+     *
+     * Defaults to `false`
      */
     // rest.request_queueing_enabled
     REQUEST_QUEUEING_ENABLED("false"),
 
     /**
      * Port to use for the REST service.
+     *
+     * Defaults to `8080`
      */
     // rest.port
     PORT("8080"),
