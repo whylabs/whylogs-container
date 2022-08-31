@@ -73,8 +73,9 @@ fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
 fun getConfiguredOpenApiPlugin() = OpenApiPlugin(
     OpenApiOptions(
         Info().apply {
+            title("whylogs container API")
             version("1.0")
-            description("whylogs API")
+            description("Container that hosts the java version of whylogs behind a REST interface.")
         }
     ).apply {
         path("/swagger-docs") // endpoint for OpenAPI json
