@@ -5,7 +5,27 @@ import org.slf4j.LoggerFactory
 private val log = LoggerFactory.getLogger(KafkaConfig::class.java)
 
 enum class KafkaNestingBehavior {
+    /**
+     * Ignore nested fields entirely.
+     */
     Ignore,
+
+    /**
+     * Flatten nested fields by concatenating them with periods.
+     *
+     * For example, the following json
+     *
+     * ```json
+     * {
+     *   "a": {
+     *       "b": 2
+     *   }
+     * }
+     * ```
+     *
+     * Would have a flattened key of `a.b` with a value of 2.
+     *
+     */
     Flatten
 }
 
