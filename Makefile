@@ -17,6 +17,7 @@ run: ## Run the service code locally without Docker.
 
 docs: ## Generate dakka documentation
 	./gradlew dokkaHtml
+	@echo See "./build/dokka/html/index.html"
 
 debug: ## Run the service in debug mode so you can connect to it via remote JVM debugger.
 	./gradlew run --debug-java
