@@ -2,7 +2,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     idea
-    kotlin("jvm") version "1.4.10"
+    kotlin("jvm") version "1.7.10"
     application
     id("org.jlleitschuh.gradle.ktlint") version "10.2.1"
     id("com.adarshr.test-logger") version "3.2.0"
@@ -38,6 +38,9 @@ testlogger {
 
 tasks.withType<KotlinCompile>().configureEach {
     kotlinOptions {
+        kotlinOptions {
+            useOldBackend = true
+        }
         // config JVM target to 1.8 for kotlin compilation tasks
         jvmTarget = "1.8"
         // Silence warnings about using Kotlin's actor and similar types. They don't yet have
@@ -73,7 +76,7 @@ val integrationTest = task<Test>("integTest") {
     useJUnitPlatform()
 }
 
-val javalinVersion = "4.4.0"
+val javalinVersion = "4.6.0"
 
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.4.10")

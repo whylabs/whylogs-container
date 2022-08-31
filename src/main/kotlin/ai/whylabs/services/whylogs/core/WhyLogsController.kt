@@ -50,7 +50,8 @@ class WhyLogsController(
     @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],
         method = HttpMethod.POST,
-        summary = "Log a map of feature names and values or an array of data points",
+        summary = "Log Data",
+        description = "Log a map of feature names and values or an array of data points",
         operationId = "track",
         tags = ["whylogs"],
         requestBody = OpenApiRequestBody(
@@ -62,7 +63,8 @@ Pass the input in single entry format (a JSON object) or a multiple entry format
   * `columns`: specify an `array` of features
   * `data`: array of actual data points
 Example:
-```
+
+```json
 {
   "datasetId": "demo-model",
   "timestamp": 1648162494947,
@@ -164,7 +166,8 @@ Here is an example from the output above
     @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],
         method = HttpMethod.POST,
-        summary = "Force the container to write out the pending profiles via whatever method it's configured for.",
+        summary = "Write Profiles",
+        description = "Force the container to write out the pending profiles via whatever method it's configured for.",
         operationId = "writeProfiles",
         tags = ["whylogs"],
         responses = [
@@ -189,7 +192,8 @@ Here is an example from the output above
     @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],
         method = HttpMethod.POST,
-        summary = "Trigger debugging info to be logged.",
+        summary = "Log Debug Info",
+        description = "Trigger debugging info to be logged.",
         operationId = "logDebugInfo",
         tags = ["whylogs"],
         responses = [
