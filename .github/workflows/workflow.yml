@@ -12,6 +12,7 @@ env:
 jobs:
   build:
     name: Build Kotlin code and Docker Image
+    timeout-minutes: 5
     runs-on: ubuntu-latest
 
     steps:
@@ -63,6 +64,7 @@ jobs:
 
   preview-docs:
     name: Generate a preview of the docs
+    timeout-minutes: 5
     if: ${{ !github.event.act && github.event_name != 'push' }}
     runs-on: ubuntu-latest
     steps:
@@ -84,6 +86,7 @@ jobs:
 
   publish-docs:
     name: Push generated docs to the docs repo
+    timeout-minutes: 5
     if: ${{ !github.event.act && github.event_name == 'push' }}
     needs: build
     runs-on: ubuntu-latest
@@ -116,6 +119,7 @@ jobs:
 
   publish_docker_image:
     name: Publish the Docker image to Docker Hub
+    timeout-minutes: 5
     if: ${{ !github.event.act && github.event_name == 'push' }}
     needs: build
     runs-on: ubuntu-latest
