@@ -3,24 +3,29 @@ package ai.whylabs.services.whylogs.core
 import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.objectMapper
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.actor
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.util.Date
+import java.util.LinkedList
 
-private data class DebugInfo(
+internal data class DebugInfo(
     var env: IEnvVars,
     var storedProfileCount: Int = 0,
     var restLogCalls: Long = 0,
     var profilesWritten: Long = 0,
     var profilesWriteAttempts: Long = 0,
+    var profilesWriteFailures: Long = 0,
+    var profilesWriteFailureCauses: LinkedList<Pair<Class<*>, Throwable>> = LinkedList(),
     var lastProfileWriteSuccess: Date? = null,
     var lastProfileWriteAttempt: Date? = null,
+    var lastProfileWriteFailure: Date? = null,
     var kafkaMessagesHandled: Long = 0,
     var startTime: Date = Date(),
-    var uptime: Date? = null
+    var uptime: Date? = null,
 )
 
 sealed class DebugInfoMessage {
@@ -28,12 +33,22 @@ sealed class DebugInfoMessage {
     class KafkaMessagesHandledMessage(val n: Int = 1) : DebugInfoMessage()
     class ProfileWrittenMessage(val n: Int = 1, val writeTime: Date = Date()) : DebugInfoMessage()
     class ProfileWriteAttemptMessage(val n: Int = 1, val writeTime: Date = Date()) : DebugInfoMessage()
+    class ProfileWriteFailuresMessage(val cause: Throwable, val writeTime: Date = Date()) : DebugInfoMessage()
+    internal class GetStateMessage(val done: CompletableDeferred<DebugInfo>) : DebugInfoMessage()
     object LogMessage : DebugInfoMessage()
 }
 
+data class DebugActorOptions(
+    val maxErrors: Int,
+    val env: IEnvVars,
+    val profileStore: ProfileStore,
+)
+
 private val logger = LoggerFactory.getLogger(object {}::class.java.`package`.name)
 
-private fun CoroutineScope.debugActor(env: IEnvVars, profileStore: ProfileStore) = actor<DebugInfoMessage>(capacity = 1000) {
+private fun CoroutineScope.debugActor(options: DebugActorOptions) = actor<DebugInfoMessage>(capacity = 1000) {
+    val env = options.env
+    val profileStore = options.profileStore
     val info = DebugInfo(env = env)
 
     suspend fun updateAndLog() {
@@ -56,10 +71,20 @@ private fun CoroutineScope.debugActor(env: IEnvVars, profileStore: ProfileStore)
             is DebugInfoMessage.LogMessage -> updateAndLog()
             is DebugInfoMessage.RestLogCalledMessage -> info.restLogCalls += msg.n
             is DebugInfoMessage.KafkaMessagesHandledMessage -> info.kafkaMessagesHandled += msg.n
+            is DebugInfoMessage.GetStateMessage -> msg.done.complete(info)
+            is DebugInfoMessage.ProfileWriteFailuresMessage -> {
+                info.profilesWriteFailures += 1
+                info.lastProfileWriteFailure = msg.writeTime
+                info.profilesWriteFailureCauses.addFirst(Pair(msg.cause.javaClass, msg.cause))
+                if (info.profilesWriteFailureCauses.size > options.maxErrors) {
+                    info.profilesWriteFailureCauses.removeLast()
+                }
+            }
             is DebugInfoMessage.ProfileWriteAttemptMessage -> {
                 info.profilesWriteAttempts += msg.n
                 info.lastProfileWriteAttempt = msg.writeTime
             }
+
             is DebugInfoMessage.ProfileWrittenMessage -> {
                 info.profilesWritten += msg.n
                 info.lastProfileWriteSuccess = msg.writeTime
@@ -68,11 +93,19 @@ private fun CoroutineScope.debugActor(env: IEnvVars, profileStore: ProfileStore)
     }
 }
 
-class DebugInfoManager private constructor(
+class DebugInfoManager internal constructor(
     private val envVars: IEnvVars = EnvVars.instance,
-    profileStore: ProfileStore = ProfileStore.instance
+    profileStore: ProfileStore = ProfileStore.instance,
+    maxErrors: Int = 10,
 ) {
-    private val debugInfo = CoroutineScope(Dispatchers.IO).debugActor(getEnv(), profileStore)
+    private val debugInfo = CoroutineScope(Dispatchers.IO).debugActor(
+        DebugActorOptions(
+            env = getEnv(),
+            profileStore = profileStore,
+            maxErrors = maxErrors,
+        )
+    )
+
     suspend fun send(msg: DebugInfoMessage) = debugInfo.send(msg)
 
     private fun getEnv(): IEnvVars {
