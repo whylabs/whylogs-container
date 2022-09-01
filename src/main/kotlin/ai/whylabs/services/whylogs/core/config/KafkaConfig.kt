@@ -8,7 +8,7 @@ enum class KafkaNestingBehavior {
     /**
      * Ignore nested fields entirely.
      */
-    Ignore,
+    IGNORE,
 
     /**
      * Flatten nested fields by concatenating them with periods.
@@ -26,7 +26,7 @@ enum class KafkaNestingBehavior {
      * Would have a flattened key of `a.b` with a value of 2.
      *
      */
-    Flatten
+    FLATTEN
 }
 
 data class KafkaConfig(
