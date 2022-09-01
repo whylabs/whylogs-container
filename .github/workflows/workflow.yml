@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: "*"
 
+env:
+  DOC_DIR: build/dokka/html/
+
 jobs:
   build:
     name: Build Kotlin code and Docker Image
@@ -73,11 +76,31 @@ jobs:
       - name: "Deploy to Netlify"
         uses: nwtgck/actions-netlify@v1.2
         with:
-          publish-dir: build/dokka/html/
+          publish-dir: ${{ env.DOC_DIR }}
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         timeout-minutes: 1
+
+
+      - name: Get the swagger definition
+        run: ./scripts/get-swagger-def.sh
+
+      - name: Generate redoc page for swagger docs
+        uses: seeebiii/redoc-cli-github-action@v10
+        with:
+          args: 'bundle -o ${{ env.DOC_DIR }}/whylogs-container.html ${{ env.DOC_DIR }}/swagger.json'
+
+      - name: Push docs to the doc repo
+        uses: cpina/github-action-push-to-another-repository@main
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.WHYLOGS_CONTAINER_DOCS_SSH}}
+        with:
+          source-directory: ${{ env.DOC_DIR }}
+          destination-github-username: 'whylabs'
+          destination-repository-name: 'whylogs-container-docs'
+          user-email: github-build@whylabs.ai
+          target-branch: master
 
   publish-docs:
     name: Push generated docs to the docs repo
@@ -98,14 +121,14 @@ jobs:
       - name: Generate redoc page for swagger docs
         uses: seeebiii/redoc-cli-github-action@v10
         with:
-          args: 'build -o build/dokka/html/whylogs-container.html build/dokka/html/swagger.json'
+          args: 'bundle -o $DOC_DIR/whylogs-container.html $DOC_DIR/swagger.json'
 
       - name: Push docs to the doc repo
         uses: cpina/github-action-push-to-another-repository@main
         env:
           SSH_DEPLOY_KEY: ${{ secrets.WHYLOGS_CONTAINER_DOCS_SSH}}
         with:
-          source-directory: 'build/dokka/html/'
+          source-directory: ${{ env.DOC_DIR }}
           destination-github-username: 'whylabs'
           destination-repository-name: 'whylogs-container-docs'
           user-email: github-build@whylabs.ai
