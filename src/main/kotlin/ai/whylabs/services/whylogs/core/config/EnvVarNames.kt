@@ -197,7 +197,7 @@ enum class EnvVarNames(val default: String? = null) {
      * Defaults to `FLATTEN`. One of [KafkaNestingBehavior].
      */
     // kafka.message_nesting_behavior
-    KAFKA_MESSAGE_NESTING_BEHAVIOR(KafkaNestingBehavior.Flatten.name),
+    KAFKA_MESSAGE_NESTING_BEHAVIOR(KafkaNestingBehavior.FLATTEN.name),
 
     /**
      * Number of consumer threads to start up. If you dedicate 3 threads to
