@@ -1,5 +1,7 @@
 package ai.whylabs.services.whylogs.core.config
 
+import java.time.temporal.ChronoUnit
+
 /**
  * @property default The default value.
  */
@@ -138,7 +140,7 @@ enum class EnvVarNames(val default: String? = null) {
      * This determines how data is grouped into profiles. If you're using
      * WhyLabs then this should match the model's type.
      *
-     * Required. One of [ProfileWritePeriod].
+     * Required. One of [ChronoUnit.HOURS] [ChronoUnit.DAYS].
      */
     // whylogs.period
     WHYLOGS_PERIOD,

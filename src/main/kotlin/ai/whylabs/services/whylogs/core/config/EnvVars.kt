@@ -18,6 +18,11 @@ enum class WriterTypes {
     S3, WHYLABS, DEBUG_FILE_SYSTEM
 }
 
+enum class WhylogsPeriod(val chronoUnit: ChronoUnit) {
+    HOURS(ChronoUnit.HOURS),
+    DAYS(ChronoUnit.DAYS),
+}
+
 enum class ProfileWritePeriod(val chronoUnit: ChronoUnit?) {
     MINUTES(ChronoUnit.MINUTES),
     FIVE_MINUTES(null),
@@ -116,7 +121,7 @@ class EnvVars private constructor() : IEnvVars {
     override val s3Prefix = EnvVarNames.S3_PREFIX.requireIf(writer == WriterTypes.S3)
     override val s3Bucket = EnvVarNames.S3_BUCKET.requireIf(writer == WriterTypes.S3)
 
-    override val whylogsPeriod = ChronoUnit.valueOf(EnvVarNames.WHYLOGS_PERIOD.require())
+    override val whylogsPeriod = validateWhylogsPeriod()
     override val profileWritePeriod = ProfileWritePeriod.valueOf(EnvVarNames.PROFILE_WRITE_PERIOD.get() ?: whylogsPeriod.name)
 
     override val port = EnvVarNames.PORT.getOrDefault().toInt()
@@ -125,4 +130,15 @@ class EnvVars private constructor() : IEnvVars {
     companion object {
         val instance: IEnvVars by lazy { EnvVars() }
     }
+}
+
+
+private fun validateWhylogsPeriod(): ChronoUnit {
+    val chrono = ChronoUnit.valueOf(EnvVarNames.WHYLOGS_PERIOD.require())
+
+    if (chrono !== ChronoUnit.DAYS && chrono !== ChronoUnit.HOURS) {
+        throw IllegalArgumentException("whylogs period must be either DAYS or HOURS")
+    }
+
+    return chrono
 }
