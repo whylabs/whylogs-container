@@ -24,12 +24,16 @@ enum class WhylogsPeriod(val chronoUnit: ChronoUnit) {
 }
 
 enum class ProfileWritePeriod(val chronoUnit: ChronoUnit?) {
-    MINUTES(ChronoUnit.MINUTES),
     FIVE_MINUTES(null),
     TEN_MINUTES(null),
     THIRTY_MINUTES(null),
     HOURS(ChronoUnit.HOURS),
     DAYS(ChronoUnit.DAYS),
+
+    /**
+     * Don't automatically upload profiles. Uploading only happens when triggered
+     * via the REST interface.
+     */
     ON_DEMAND(null);
 
     fun asDuration(): Duration? {
@@ -39,7 +43,6 @@ enum class ProfileWritePeriod(val chronoUnit: ChronoUnit?) {
             THIRTY_MINUTES -> return Duration.of(30, ChronoUnit.MINUTES)
             ON_DEMAND -> return null
 
-            MINUTES -> return Duration.of(1, ChronoUnit.MINUTES)
             HOURS -> return Duration.of(1, ChronoUnit.HOURS)
             DAYS -> return Duration.of(1, ChronoUnit.DAYS)
         }
@@ -131,7 +134,6 @@ class EnvVars private constructor() : IEnvVars {
         val instance: IEnvVars by lazy { EnvVars() }
     }
 }
-
 
 private fun validateWhylogsPeriod(): ChronoUnit {
     val chrono = ChronoUnit.valueOf(EnvVarNames.WHYLOGS_PERIOD.require())
