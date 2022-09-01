@@ -98,7 +98,7 @@ jobs:
       - name: Generate redoc page for swagger docs
         uses: seeebiii/redoc-cli-github-action@v10
         with:
-          args: 'build -o build/dokka/html/whylogs-container.html build/dokka/http/swagger.json'
+          args: 'build -o build/dokka/html/whylogs-container.html build/dokka/html/swagger.json'
 
       - name: Push docs to the doc repo
         uses: cpina/github-action-push-to-another-repository@main
