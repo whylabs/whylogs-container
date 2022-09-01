@@ -1,7 +1,7 @@
 #!/bin/bash
 trap 'kill $(jobs -p)' EXIT
 
-DOC_DIR=build/dokka/http
+DOC_DIR=build/dokka/html
 
 mkdir -p $DOC_DIR
 
