@@ -1,5 +1,6 @@
-- Image on [Docker Hub](https://hub.docker.com/repository/docker/whylabs/whylogs)
-- Docs on [GitHub Pages](https://whylabs.github.io/whylogs-container-docs)
+- [Docker Hub Image](https://hub.docker.com/repository/docker/whylabs/whylogs)
+- [Dokka Docs](https://whylabs.github.io/whylogs-container-docs)
+- [Redoc API Overview](https://whylabs.github.io/whylogs-container-docs/whylogs-container)
 
 ## Before Pushing
 
