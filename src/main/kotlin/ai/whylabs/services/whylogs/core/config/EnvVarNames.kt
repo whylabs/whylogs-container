@@ -65,7 +65,7 @@ enum class EnvVarNames(val default: String? = null) {
     /**
      * How frequent the container should upload profiles. This defaults to the same cadence as the
      * model definition. For an hourly model, you'll upload profiles on an hourly basis. If this is set
-     * to MINUTE then you'll upload profiles every minute.
+     * to [ProfileWritePeriod.HOURS] then you'll upload profiles every hour.
      *
      * Defaults to whatever [WHYLOGS_PERIOD] is. One of [ProfileWritePeriod]
      */
