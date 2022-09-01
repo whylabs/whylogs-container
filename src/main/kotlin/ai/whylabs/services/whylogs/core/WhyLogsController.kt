@@ -55,75 +55,43 @@ class WhyLogsController(
         operationId = "track",
         tags = ["whylogs"],
         requestBody = OpenApiRequestBody(
-            content = [OpenApiContent(type = ContentType.JSON)],
+            content = [OpenApiContent(from = LogRequest::class, type = ContentType.JSON)],
             description = """
-Pass the input in single entry format (a JSON object) or a multiple entry format.
-* Set `single` key if you're passing a single data point with multiple features
-* Set `multiple` key if you're passing multiple data at once. Here are the required fields:
-  * `columns`: specify an `array` of features
-  * `data`: array of actual data points
-Example:
+Pass the input in single entry format or a multiple entry format.
+- Set `single` key if you're passing a single data point with multiple features
+- Set `multiple` key if you're passing multiple data at once.
 
-```json
-{
-  "datasetId": "demo-model",
-  "timestamp": 1648162494947,
-  "tags": {
-    "tagKey": "tagValue"
-  },
-  "single": {
-    "feature1": "test",
-    "feature2": 1,
-    "feature3": 1.0,
-    "feature4": true
-  }
-}
-```
-
-Passing multiple data points. The data is compatible with Pandas JSON output:
+The `multiple` format is is compatible with Pandas JSON output:
 ```
 import pandas as pd
 
 cars = {'Brand': ['Honda Civic','Toyota Corolla','Ford Focus','Audi A4'],
-        'Price': [22000,25000,27000,35000]
-        }
+        'Price': [22000,25000,27000,35000] }
 
 df = pd.DataFrame(cars, columns = ['Brand', 'Price'])
-df.to_json(orient="split")
+df.to_json(orient="split") # this is the value of `multiple`
 ```
 
 Here is an example from the output above
-```json
+```
 {
-  "datasetId": "demo-model",
-  "timestamp": 1648162494947,
-  "tags": {
-    "tag1": "value1"
-  },
-  "multiple": {
-    "columns": [
-      "Brand",
-      "Price"
-    ],
-    "data": [
-      [
-        "Honda Civic",
-        22000
-      ],
-      [
-        "Toyota Corolla",
-        25000
-      ],
-      [
-        "Ford Focus",
-        27000
-      ],
-      [
-        "Audi A4",
-        35000
-      ]
-    ]
-  }
+    "datasetId": "demo-model",
+    "timestamp": 1648162494947,
+    "tags": {
+        "tag1": "value1"
+    },
+    "multiple": {
+        "columns": [
+            "Brand",
+            "Price"
+        ],
+        "data": [
+            [ "Honda Civic", 22000 ],
+            [ "Toyota Corolla", 25000 ],
+            [ "Ford Focus", 27000 ],
+            [ "Audi A4", 35000 ]
+        ]
+    }
 }
 ```
 """
@@ -211,21 +179,29 @@ Here is an example from the output above
 
 @Schema(description = "Response for writing out profiles.")
 data class WriteProfilesResponse(
-    @Schema(description = "The amount of profiles that were written out.")
+    @Schema(description = "The amount of profiles that were written out.", example = "2")
     val profilesWritten: Int,
-    @Schema(description = "The paths of the profiles that were written if they exist. Some writers may not write profiles to anyplace that can be described as a path.")
+    @Schema(
+        description = "The paths of the profiles that were written if they exist. Some writers may not write profiles to anyplace that can be described as a path.",
+        example = """["s3://bucket/path/profile.bin"]"""
+    )
     val profilePaths: List<String>
 )
 
 data class LogRequest(
+    @Schema(example = "model-2")
     val datasetId: String,
     val timestamp: Long? = null,
+    @Schema(example = """{"city": "Seattle", "job":"SDE"}""")
     val tags: Map<String, String>?,
+    @Schema(description = "Key/value pairs of col/data.", example = """{"col1": 1, "col2":"value"}""")
     val single: Map<String, Any>?,
     val multiple: MultiLog?,
 )
 
 data class MultiLog(
+    @Schema(example = """["column1", "column2"]""")
     val columns: List<String>,
+    @Schema(example = """[["column1Value1", 1.0], ["column1Value2", 2.0]]""")
     val data: List<List<Any>>
 )
