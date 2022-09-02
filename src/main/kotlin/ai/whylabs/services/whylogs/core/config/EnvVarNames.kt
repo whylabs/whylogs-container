@@ -140,7 +140,7 @@ enum class EnvVarNames(val default: String? = null) {
      * This determines how data is grouped into profiles. If you're using
      * WhyLabs then this should match the model's type.
      *
-     * Required. One of [ChronoUnit.HOURS] [ChronoUnit.DAYS].
+     * Required. One of [ChronoUnit.HOURS] or [ChronoUnit.DAYS].
      */
     // whylogs.period
     WHYLOGS_PERIOD,
