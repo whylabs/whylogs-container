@@ -17,6 +17,7 @@ import io.javalin.plugin.openapi.annotations.OpenApiResponse
 import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
+import java.util.Base64
 
 private const val apiKeyHeader = "X-API-Key"
 
@@ -39,6 +40,66 @@ class WhyLogsController(
             logger.warn("Dropping request because of invalid API key")
             throw UnauthorizedResponse("Invalid API key")
         }
+    }
+
+    // MCTODO: Write the decoding function
+    fun decodeMessage(ctx: Context) {
+        val body = ctx.body()
+        val message = body["message"]
+        val messageData = message["data"]
+
+        val decoder: Base64.Decoder = Base64.getDecoder()
+        val decoded = String(decoder.decode(messageData))
+
+        return decoded
+
+    // Example Pub/sub message
+
+    // {
+    //   "message": {
+    //     "attributes": {
+    //       "key": "value"
+    //     },
+    //     "data": "SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ==",
+    //     "messageId": "136969346945"
+    //   },
+    //   "subscription": "projects/myproject/subscriptions/mysubscription"
+    // }    
+
+        if (apiKey != envVars.expectedApiKey) {
+            logger.warn("Dropping request because of invalid API key")
+            throw UnauthorizedResponse("Invalid API key")
+        }
+    } 
+
+    fun trackLogRequest(request: LogRequest) {
+            if (request.single == null && request.multiple == null) {
+                return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
+                return
+            }
+
+            // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
+            // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
+            val prefixedTags = if (envVars.writer == WriterTypes.S3) request.tags else request.tags?.mapKeys { (key) ->
+                "$SegmentTagPrefix$key"
+            }
+
+            val processedRequest = request.copy(tags = prefixedTags)
+
+            runBlocking {
+                profileManager.handle(processedRequest)
+                debugInfo.send(DebugInfoMessage.RestLogCalledMessage())
+            }
+        } catch (t: MismatchedInputException) {
+            logger.warn("Invalid request format", t)
+            throw IllegalArgumentException("Invalid request format", t)
+        } catch (t: JsonParseException) {
+            logger.warn("Invalid request format", t)
+            throw IllegalArgumentException("Invalid request format", t)
+        } catch (t: Throwable) {
+            logger.error("Error handling request", t)
+            throw t
+        }        
     }
 
     fun after(ctx: Context) {
@@ -102,34 +163,26 @@ Here is an example from the output above
         try {
             val request = ctx.bodyStreamAsClass(LogRequest::class.java)
 
-            if (request.single == null && request.multiple == null) {
-                return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
-                return
-            }
-
-            // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
-            // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
-            val prefixedTags = if (envVars.writer == WriterTypes.S3) request.tags else request.tags?.mapKeys { (key) ->
-                "$SegmentTagPrefix$key"
-            }
-
-            val processedRequest = request.copy(tags = prefixedTags)
-
-            runBlocking {
-                profileManager.handle(processedRequest)
-                debugInfo.send(DebugInfoMessage.RestLogCalledMessage())
-            }
-        } catch (t: MismatchedInputException) {
-            logger.warn("Invalid request format", t)
-            throw IllegalArgumentException("Invalid request format", t)
-        } catch (t: JsonParseException) {
-            logger.warn("Invalid request format", t)
-            throw IllegalArgumentException("Invalid request format", t)
-        } catch (t: Throwable) {
-            logger.error("Error handling request", t)
-            throw t
-        }
+            trackLogRequest(request)
     }
+
+
+    @OpenApi(
+        headers = [OpenApiParam(name = apiKeyHeader, required = true)],
+        method = HttpMethod.POST,
+        summary = "Decode pub/sub messages",
+        description = "Open envelope and decode base64 encoded pub/sub message.",
+        operationId = "message",
+        tags = ["whylogs"],
+        responses = [
+            OpenApiResponse("200"),
+            OpenApiResponse("500", description = "Something unexpected went wrong.")
+        ]
+    )
+    fun preprocessMessage(ctx: Context) = runBlocking { 
+        // TODO: Decode and take message out of envelope
+
+     }    
 
     @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],

@@ -48,6 +48,7 @@ fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
     }.apply {
         Runtime.getRuntime().addShutdownHook(Thread { stop() })
         before("logs", whylogs::preprocess)
+        before("message", whylogs::decodeMessage)
         before("writeProfiles", whylogs::preprocess)
 
         exception(IllegalArgumentException::class.java) { e, ctx ->
@@ -55,6 +56,7 @@ fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
         }
         routes {
             path("logs") { post(whylogs::track) }
+            path("message") { post(whylogs::track)}
             path("writeProfiles") { post(whylogs::writeProfiles) }
             path("logDebugInfo") { post(whylogs::logDebugInfo) }
         }
