@@ -42,34 +42,34 @@ class WhyLogsController(
         }
     }
 
-    // MCTODO: Write the decoding function
+    
     fun decodeMessage(ctx: Context) {
+        // Example Pub/sub message
+
+        // {
+        //   "message": {
+        //     "attributes": {
+        //       "key": "value"
+        //     },
+        //     "data": "SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ==",
+        //     "messageId": "136969346945"
+        //   },
+        //   "subscription": "projects/myproject/subscriptions/mysubscription"
+        // }    
+        
+        preprocess()
+
+        // Open envelope
         val body = ctx.body()
         val message = body["message"]
         val messageData = message["data"]
 
+        // Decode data
         val decoder: Base64.Decoder = Base64.getDecoder()
         val decoded = String(decoder.decode(messageData))
 
         return decoded
 
-    // Example Pub/sub message
-
-    // {
-    //   "message": {
-    //     "attributes": {
-    //       "key": "value"
-    //     },
-    //     "data": "SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ==",
-    //     "messageId": "136969346945"
-    //   },
-    //   "subscription": "projects/myproject/subscriptions/mysubscription"
-    // }    
-
-        if (apiKey != envVars.expectedApiKey) {
-            logger.warn("Dropping request because of invalid API key")
-            throw UnauthorizedResponse("Invalid API key")
-        }
     } 
 
     fun trackLogRequest(request: LogRequest) {
@@ -179,10 +179,6 @@ Here is an example from the output above
             OpenApiResponse("500", description = "Something unexpected went wrong.")
         ]
     )
-    fun preprocessMessage(ctx: Context) = runBlocking { 
-        // TODO: Decode and take message out of envelope
-
-     }    
 
     @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],
