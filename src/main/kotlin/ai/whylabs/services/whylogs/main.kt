@@ -47,16 +47,16 @@ fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
         it.jsonMapper(JavalinJackson(mapper))
     }.apply {
         Runtime.getRuntime().addShutdownHook(Thread { stop() })
+        before("message", whylogs::preprocess)
         before("logs", whylogs::preprocess)
-        before("message", whylogs::decodeMessage)
         before("writeProfiles", whylogs::preprocess)
 
         exception(IllegalArgumentException::class.java) { e, ctx ->
             ctx.json(e.message ?: "Bad Request").status(400)
         }
         routes {
+            path("message") { post(whylogs::message) }
             path("logs") { post(whylogs::track) }
-            path("message") { post(whylogs::track)}
             path("writeProfiles") { post(whylogs::writeProfiles) }
             path("logDebugInfo") { post(whylogs::logDebugInfo) }
         }

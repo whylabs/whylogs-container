@@ -17,7 +17,7 @@ import io.javalin.plugin.openapi.annotations.OpenApiResponse
 import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import java.util.Base64
+import java.util.Base64 // added by Josh
 
 private const val apiKeyHeader = "X-API-Key"
 
@@ -42,66 +42,6 @@ class WhyLogsController(
         }
     }
 
-    
-    fun decodeMessage(ctx: Context) {
-        // Example Pub/sub message
-
-        // {
-        //   "message": {
-        //     "attributes": {
-        //       "key": "value"
-        //     },
-        //     "data": "SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ==",
-        //     "messageId": "136969346945"
-        //   },
-        //   "subscription": "projects/myproject/subscriptions/mysubscription"
-        // }    
-        
-        preprocess()
-
-        // Open envelope
-        val body = ctx.body()
-        val message = body["message"]
-        val messageData = message["data"]
-
-        // Decode data
-        val decoder: Base64.Decoder = Base64.getDecoder()
-        val decoded = String(decoder.decode(messageData))
-
-        return decoded
-
-    } 
-
-    fun trackLogRequest(request: LogRequest) {
-            if (request.single == null && request.multiple == null) {
-                return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
-                return
-            }
-
-            // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
-            // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
-            val prefixedTags = if (envVars.writer == WriterTypes.S3) request.tags else request.tags?.mapKeys { (key) ->
-                "$SegmentTagPrefix$key"
-            }
-
-            val processedRequest = request.copy(tags = prefixedTags)
-
-            runBlocking {
-                profileManager.handle(processedRequest)
-                debugInfo.send(DebugInfoMessage.RestLogCalledMessage())
-            }
-        } catch (t: MismatchedInputException) {
-            logger.warn("Invalid request format", t)
-            throw IllegalArgumentException("Invalid request format", t)
-        } catch (t: JsonParseException) {
-            logger.warn("Invalid request format", t)
-            throw IllegalArgumentException("Invalid request format", t)
-        } catch (t: Throwable) {
-            logger.error("Error handling request", t)
-            throw t
-        }        
-    }
-
     fun after(ctx: Context) {
         runBlocking {
             profileManager.mergePending()
@@ -121,18 +61,14 @@ class WhyLogsController(
 Pass the input in single entry format or a multiple entry format.
 - Set `single` key if you're passing a single data point with multiple features
 - Set `multiple` key if you're passing multiple data at once.
-
 The `multiple` format is is compatible with Pandas JSON output:
 ```
 import pandas as pd
-
 cars = {'Brand': ['Honda Civic','Toyota Corolla','Ford Focus','Audi A4'],
         'Price': [22000,25000,27000,35000] }
-
 df = pd.DataFrame(cars, columns = ['Brand', 'Price'])
 df.to_json(orient="split") # this is the value of `multiple`
 ```
-
 Here is an example from the output above
 ```
 {
@@ -163,22 +99,34 @@ Here is an example from the output above
         try {
             val request = ctx.bodyStreamAsClass(LogRequest::class.java)
 
-            trackLogRequest(request)
+            if (request.single == null && request.multiple == null) {
+                return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
+                return
+            }
+
+            // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
+            // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
+            val prefixedTags = if (envVars.writer == WriterTypes.S3) request.tags else request.tags?.mapKeys { (key) ->
+                "$SegmentTagPrefix$key"
+            }
+
+            val processedRequest = request.copy(tags = prefixedTags)
+
+            runBlocking {
+                profileManager.handle(processedRequest)
+                debugInfo.send(DebugInfoMessage.RestLogCalledMessage())
+            }
+        } catch (t: MismatchedInputException) {
+            logger.warn("Invalid request format", t)
+            throw IllegalArgumentException("Invalid request format", t)
+        } catch (t: JsonParseException) {
+            logger.warn("Invalid request format", t)
+            throw IllegalArgumentException("Invalid request format", t)
+        } catch (t: Throwable) {
+            logger.error("Error handling request", t)
+            throw t
+        }
     }
-
-
-    @OpenApi(
-        headers = [OpenApiParam(name = apiKeyHeader, required = true)],
-        method = HttpMethod.POST,
-        summary = "Decode pub/sub messages",
-        description = "Open envelope and decode base64 encoded pub/sub message.",
-        operationId = "message",
-        tags = ["whylogs"],
-        responses = [
-            OpenApiResponse("200"),
-            OpenApiResponse("500", description = "Something unexpected went wrong.")
-        ]
-    )
 
     @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],
@@ -220,6 +168,35 @@ Here is an example from the output above
     )
     fun logDebugInfo(ctx: Context) = runBlocking { debugInfo.send(DebugInfoMessage.LogMessage) }
 
+    @OpenApi(
+        headers = [OpenApiParam(name = apiKeyHeader, required = true)],
+        method = HttpMethod.POST,
+        summary = "Decode pub/sub messages",
+        description = "Open envelope and decode base64 encoded pub/sub message.",
+        operationId = "message",
+        tags = ["whylogs"],
+        responses = [
+            OpenApiResponse("200",content = [OpenApiContent(from = MessageResponse::class)]),
+            OpenApiResponse("500", description = "Something unexpected went wrong.")
+        ]
+    )  
+    fun message(ctx: Context) {    
+        // Convert to JSON object
+        val pub_message = ctx.bodyStreamAsClass(PubsubEnvelope::class.java)
+
+        // Open envelope
+        val messageData = pub_message.message.data
+        
+        // Decode data
+        val decoder: Base64.Decoder = Base64.getDecoder()
+        val decoded = String(decoder.decode(messageData))
+
+        ctx.res.status = 200
+        ctx.json(decoded)
+
+    } 
+    
+
     private fun return400(ctx: Context, message: String) {
         ctx.res.status = 400
         ctx.result(message)
@@ -235,7 +212,14 @@ data class WriteProfilesResponse(
         example = """["s3://bucket/path/profile.bin"]"""
     )
     val profilePaths: List<String>
-)
+) 
+
+@Schema(description = "Response for writing out profiles.")
+data class MessageResponse(
+    @Schema(description = "The message receieved.")
+    val message: PubsubEnvelope,
+    
+) 
 
 data class LogRequest(
     @Schema(example = "model-2")
@@ -253,4 +237,34 @@ data class MultiLog(
     val columns: List<String>,
     @Schema(example = """[["column1Value1", 1.0], ["column1Value2", 2.0]]""")
     val data: List<List<Any>>
+)
+
+// Example Pub/sub message
+
+// {
+//   "message": {
+//     "attributes": {
+//       "key": "value"
+//     },
+//     "data": "SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ==",
+//     "messageId": "136969346945"
+//   },
+//   "subscription": "projects/myproject/subscriptions/mysubscription"
+// }   
+
+data class PubsubEnvelope(
+    @Schema(
+        description = "Envelope containing all metadata from pubsub push endpoint request",
+        example = """{"attributes": {"key":"value"},{"data":"SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ=="},{"messageId":"136969346945"}}""")
+    val message: Message,
+    @Schema(
+        description = "Key value object containing subscription name", 
+        example = """"projects/myproject/subscriptions/mysubscription""")
+    val subscription: String
+)
+
+data class Message(
+    val attributes: Map<String,String>?,
+    val data: String,
+    val messageId: String
 )
