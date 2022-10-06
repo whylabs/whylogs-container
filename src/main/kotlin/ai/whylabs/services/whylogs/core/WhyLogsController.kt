@@ -203,9 +203,7 @@ Here is an example from the output above
         }
 
         return trackLogRequest(logRequestObject)
-
     }
-
 
     private fun return400(ctx: Context, message: String) {
         ctx.res.status = 400
@@ -258,16 +256,18 @@ data class MultiLog(
 data class PubsubEnvelope(
     @Schema(
         description = "Envelope containing all metadata from pubsub push endpoint request",
-        example = """{"attributes": {"key":"value"},{"data":"SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ=="},{"messageId":"136969346945"}}""")
+        example = """{"attributes": {"key":"value"},{"data":"SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ=="},{"messageId":"136969346945"}}"""
+        )
     val message: Message,
     @Schema(
         description = "Key value object containing subscription name",
-        example = """"projects/myproject/subscriptions/mysubscription""")
+        example = """"projects/myproject/subscriptions/mysubscription"""
+        )
     val subscription: String
 )
 
 data class Message(
-    val attributes: Map<String,String>?,
+    val attributes: Map<String, String>?,
     val data: String,
     val messageId: String
 )
