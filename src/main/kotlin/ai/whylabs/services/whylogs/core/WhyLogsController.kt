@@ -16,8 +16,8 @@ import io.javalin.plugin.openapi.annotations.OpenApiRequestBody
 import io.javalin.plugin.openapi.annotations.OpenApiResponse
 import io.swagger.v3.oas.annotations.media.Schema
 import org.slf4j.LoggerFactory
-import kotlinx.coroutines.runBlocking
 import java.util.Base64
+import kotlinx.coroutines.runBlocking
 
 private const val apiKeyHeader = "X-API-Key"
 
@@ -257,12 +257,12 @@ data class PubsubEnvelope(
     @Schema(
         description = "Envelope containing all metadata from pubsub push endpoint request",
         example = """{"attributes": {"key":"value"},{"data":"SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ=="},{"messageId":"136969346945"}}"""
-        )
+    )
     val message: Message,
     @Schema(
         description = "Key value object containing subscription name",
         example = """"projects/myproject/subscriptions/mysubscription"""
-        )
+    )
     val subscription: String
 )
 
