@@ -17,8 +17,8 @@ import io.javalin.plugin.openapi.annotations.OpenApiResponse
 import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import com.google.gson.Gson // added by Josh
-import java.util.Base64 // added by Josh
+import com.google.gson.Gson
+import java.util.Base64
 
 private const val apiKeyHeader = "X-API-Key"
 
