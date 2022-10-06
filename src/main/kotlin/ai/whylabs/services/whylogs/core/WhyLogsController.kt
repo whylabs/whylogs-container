@@ -17,6 +17,7 @@ import io.javalin.plugin.openapi.annotations.OpenApiResponse
 import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
+import com.google.gson.Gson // added by Josh
 import java.util.Base64 // added by Josh
 
 private const val apiKeyHeader = "X-API-Key"
@@ -96,13 +97,16 @@ Here is an example from the output above
         responses = [OpenApiResponse("200"), OpenApiResponse("400", description = "Bad or invalid input body")]
     )
     fun track(ctx: Context) {
-        try {
-            val request = ctx.bodyStreamAsClass(LogRequest::class.java)
+        val request = ctx.bodyStreamAsClass(LogRequest::class.java)
+        if (request.single == null && request.multiple == null) {
+            return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
+            return
+        }
+        return trackLogRequest(request)
+    }
 
-            if (request.single == null && request.multiple == null) {
-                return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
-                return
-            }
+    fun trackLogRequest(request: LogRequest) {
+        try {
 
             // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
             // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
@@ -126,7 +130,7 @@ Here is an example from the output above
             logger.error("Error handling request", t)
             throw t
         }
-    }
+    }    
 
     @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],
@@ -171,28 +175,35 @@ Here is an example from the output above
     @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],
         method = HttpMethod.POST,
-        summary = "Decode pub/sub messages",
-        description = "Open envelope and decode base64 encoded pub/sub message.",
-        operationId = "message",
+        summary = "Track decoded pub/sub messages",
+        description = "Open envelope and decode base64 encoded pub/sub message and track",
+        operationId = "trackMessage",
         tags = ["whylogs"],
         responses = [
-            OpenApiResponse("200",content = [OpenApiContent(from = MessageResponse::class)]),
+            OpenApiResponse("200"),
             OpenApiResponse("500", description = "Something unexpected went wrong.")
         ]
     )  
-    fun message(ctx: Context) {    
+    fun trackMessage(ctx: Context) {    
         // Convert to JSON object
         val pub_message = ctx.bodyStreamAsClass(PubsubEnvelope::class.java)
 
         // Open envelope
-        val messageData = pub_message.message.data
+        val encodedMessageData = pub_message.message.data
         
         // Decode data
         val decoder: Base64.Decoder = Base64.getDecoder()
-        val decoded = String(decoder.decode(messageData))
+        val decodedMessageData = String(decoder.decode(encodedMessageData))
+        
+        // Create LogRequest object from string
+        val logRequestObject = Gson().fromJson(decodedMessageData, LogRequest::class.java)
 
-        ctx.res.status = 200
-        ctx.json(decoded)
+        if (logRequestObject.single == null && logRequestObject.multiple == null) {
+            return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
+            return
+        }
+
+        return trackLogRequest(logRequestObject)
 
     } 
     
@@ -212,13 +223,6 @@ data class WriteProfilesResponse(
         example = """["s3://bucket/path/profile.bin"]"""
     )
     val profilePaths: List<String>
-) 
-
-@Schema(description = "Response for writing out profiles.")
-data class MessageResponse(
-    @Schema(description = "The message receieved.")
-    val message: PubsubEnvelope,
-    
 ) 
 
 data class LogRequest(

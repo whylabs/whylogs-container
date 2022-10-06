@@ -47,7 +47,7 @@ fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
         it.jsonMapper(JavalinJackson(mapper))
     }.apply {
         Runtime.getRuntime().addShutdownHook(Thread { stop() })
-        before("message", whylogs::preprocess)
+        before("pubsubLogs", whylogs::preprocess)
         before("logs", whylogs::preprocess)
         before("writeProfiles", whylogs::preprocess)
 
@@ -55,7 +55,7 @@ fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
             ctx.json(e.message ?: "Bad Request").status(400)
         }
         routes {
-            path("message") { post(whylogs::message) }
+            path("pubsubLogs") { post(whylogs::trackMessage) }
             path("logs") { post(whylogs::track) }
             path("writeProfiles") { post(whylogs::writeProfiles) }
             path("logDebugInfo") { post(whylogs::logDebugInfo) }
