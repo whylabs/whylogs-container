@@ -1,10 +1,10 @@
 package ai.whylabs.services.whylogs.core
-
 import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.core.config.WriterTypes
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
+import com.google.gson.Gson
 import io.javalin.http.Context
 import io.javalin.http.UnauthorizedResponse
 import io.javalin.plugin.openapi.annotations.ContentType
@@ -15,9 +15,8 @@ import io.javalin.plugin.openapi.annotations.OpenApiParam
 import io.javalin.plugin.openapi.annotations.OpenApiRequestBody
 import io.javalin.plugin.openapi.annotations.OpenApiResponse
 import io.swagger.v3.oas.annotations.media.Schema
-import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import com.google.gson.Gson
+import kotlinx.coroutines.runBlocking
 import java.util.Base64
 
 private const val apiKeyHeader = "X-API-Key"
@@ -130,7 +129,7 @@ Here is an example from the output above
             logger.error("Error handling request", t)
             throw t
         }
-    }    
+    }
 
     @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],
@@ -183,18 +182,18 @@ Here is an example from the output above
             OpenApiResponse("200"),
             OpenApiResponse("500", description = "Something unexpected went wrong.")
         ]
-    )  
-    fun trackMessage(ctx: Context) {    
+    )
+    fun trackMessage(ctx: Context) {
         // Convert to JSON object
         val pub_message = ctx.bodyStreamAsClass(PubsubEnvelope::class.java)
 
         // Open envelope
         val encodedMessageData = pub_message.message.data
-        
+
         // Decode data
         val decoder: Base64.Decoder = Base64.getDecoder()
         val decodedMessageData = String(decoder.decode(encodedMessageData))
-        
+
         // Create LogRequest object from string
         val logRequestObject = Gson().fromJson(decodedMessageData, LogRequest::class.java)
 
@@ -205,8 +204,8 @@ Here is an example from the output above
 
         return trackLogRequest(logRequestObject)
 
-    } 
-    
+    }
+
 
     private fun return400(ctx: Context, message: String) {
         ctx.res.status = 400
@@ -223,7 +222,7 @@ data class WriteProfilesResponse(
         example = """["s3://bucket/path/profile.bin"]"""
     )
     val profilePaths: List<String>
-) 
+)
 
 data class LogRequest(
     @Schema(example = "model-2")
@@ -262,7 +261,7 @@ data class PubsubEnvelope(
         example = """{"attributes": {"key":"value"},{"data":"SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ=="},{"messageId":"136969346945"}}""")
     val message: Message,
     @Schema(
-        description = "Key value object containing subscription name", 
+        description = "Key value object containing subscription name",
         example = """"projects/myproject/subscriptions/mysubscription""")
     val subscription: String
 )
