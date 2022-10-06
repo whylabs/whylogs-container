@@ -15,9 +15,9 @@ import io.javalin.plugin.openapi.annotations.OpenApiParam
 import io.javalin.plugin.openapi.annotations.OpenApiRequestBody
 import io.javalin.plugin.openapi.annotations.OpenApiResponse
 import io.swagger.v3.oas.annotations.media.Schema
-import java.util.Base64
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
+import java.util.Base64
 
 private const val apiKeyHeader = "X-API-Key"
 
