@@ -1,10 +1,14 @@
 package ai.whylabs.services.whylogs.core
+
 import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.core.config.WriterTypes
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
-import com.google.gson.Gson
+import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import io.javalin.http.Context
 import io.javalin.http.UnauthorizedResponse
 import io.javalin.plugin.openapi.annotations.ContentType
@@ -32,6 +36,7 @@ class WhyLogsController(
 
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
+    private val mapper = jacksonObjectMapper()
 
     fun preprocess(ctx: Context) {
         val apiKey = ctx.header(apiKeyHeader)?.trim()
@@ -96,17 +101,24 @@ Here is an example from the output above
         responses = [OpenApiResponse("200"), OpenApiResponse("400", description = "Bad or invalid input body")]
     )
     fun track(ctx: Context) {
-        val request = ctx.bodyStreamAsClass(LogRequest::class.java)
-        if (request.single == null && request.multiple == null) {
-            return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
-            return
+        try {
+            val request = ctx.bodyStreamAsClass(LogRequest::class.java)
+            return trackLogRequest(request)
+        } catch (t: MismatchedInputException) {
+            logger.warn("Invalid request format", t)
+            throw IllegalArgumentException("Invalid request format", t)
+        } catch (t: JsonParseException) {
+            logger.warn("Invalid request format", t)
+            throw IllegalArgumentException("Invalid request format", t)
         }
-        return trackLogRequest(request)
     }
 
-    fun trackLogRequest(request: LogRequest) {
-        try {
+    private fun trackLogRequest(request: LogRequest) {
+        if (request.single == null && request.multiple == null) {
+            throw IllegalArgumentException("Missing input data, must supply either a `single` or `multiple` field.")
+        }
 
+        try {
             // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
             // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
             val prefixedTags = if (envVars.writer == WriterTypes.S3) request.tags else request.tags?.mapKeys { (key) ->
@@ -119,12 +131,6 @@ Here is an example from the output above
                 profileManager.handle(processedRequest)
                 debugInfo.send(DebugInfoMessage.RestLogCalledMessage())
             }
-        } catch (t: MismatchedInputException) {
-            logger.warn("Invalid request format", t)
-            throw IllegalArgumentException("Invalid request format", t)
-        } catch (t: JsonParseException) {
-            logger.warn("Invalid request format", t)
-            throw IllegalArgumentException("Invalid request format", t)
         } catch (t: Throwable) {
             logger.error("Error handling request", t)
             throw t
@@ -174,40 +180,61 @@ Here is an example from the output above
     @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],
         method = HttpMethod.POST,
-        summary = "Track decoded pub/sub messages",
-        description = "Open envelope and decode base64 encoded pub/sub message and track",
-        operationId = "trackMessage",
+        summary = "Track pub/sub messages",
+        description = "Decode base64 encoded pub/sub message and track them",
+        operationId = "trackPubSubMessage",
         tags = ["whylogs"],
+        requestBody = OpenApiRequestBody(
+            content = [OpenApiContent(from = PubSubEnvelope::class, type = ContentType.JSON)],
+            description = """
+                A Google Pub\Sub interface to tracking data. Does the same thing as /track except
+                it consumes a message in the format that Pub\Sub uses.
+"""
+        ),
         responses = [
             OpenApiResponse("200"),
             OpenApiResponse("500", description = "Something unexpected went wrong.")
         ]
     )
     fun trackMessage(ctx: Context) {
-        // Convert to JSON object
-        val pub_message = ctx.bodyStreamAsClass(PubsubEnvelope::class.java)
-
-        // Open envelope
-        val encodedMessageData = pub_message.message.data
-
-        // Decode data
-        val decoder: Base64.Decoder = Base64.getDecoder()
-        val decodedMessageData = String(decoder.decode(encodedMessageData))
-
-        // Create LogRequest object from string
-        val logRequestObject = Gson().fromJson(decodedMessageData, LogRequest::class.java)
-
-        if (logRequestObject.single == null && logRequestObject.multiple == null) {
-            return400(ctx, "Missing input data, must supply either a `single` or `multiple` field.")
-            return
+        val encodedMessageData = try {
+            // Convert to JSON object
+            ctx.bodyStreamAsClass(PubSubEnvelope::class.java).message.data
+        } catch (t: MismatchedInputException) {
+            logger.warn("Invalid request format", t)
+            throw IllegalArgumentException("Invalid request format", t)
+        } catch (t: JsonParseException) {
+            logger.warn("Invalid request format", t)
+            throw IllegalArgumentException("Invalid request format", t)
         }
 
-        return trackLogRequest(logRequestObject)
-    }
 
-    private fun return400(ctx: Context, message: String) {
-        ctx.res.status = 400
-        ctx.result(message)
+        val decodedMessageBytes = try {
+            val decoder = Base64.getDecoder()
+            decoder.decode(encodedMessageData)
+        } catch (t: IllegalArgumentException) {
+            logger.warn("pubsub message contained invalid base 64")
+            throw IllegalArgumentException("pubsub message contained invalid base 64", t)
+        }
+
+        try {
+            // Create LogRequest object from string
+            val logRequest: LogRequest = mapper.readValue(decodedMessageBytes)
+            return trackLogRequest(logRequest)
+
+        } catch (t: MissingKotlinParameterException) {
+            logger.warn("Couldn't decode the pubsub message", t)
+            throw IllegalArgumentException(
+                "Couldn't decode the pubsub message. Should have been a JSON encoded LogRequest payload, like the /track API consumes.",
+                t
+            )
+        } catch (t: JsonParseException) {
+            logger.warn("Couldn't decode the pubsub message", t)
+            throw IllegalArgumentException(
+                "Couldn't decode the pubsub message. Should have been a JSON encoded LogRequest payload, like the /track API consumes.",
+                t
+            )
+        }
     }
 }
 
@@ -240,34 +267,24 @@ data class MultiLog(
     val data: List<List<Any>>
 )
 
-// Example Pub/sub message
-
-// {
-//   "message": {
-//     "attributes": {
-//       "key": "value"
-//     },
-//     "data": "SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ==",
-//     "messageId": "136969346945"
-//   },
-//   "subscription": "projects/myproject/subscriptions/mysubscription"
-// }   
-
-data class PubsubEnvelope(
-    @Schema(
-        description = "Envelope containing all metadata from pubsub push endpoint request",
-        example = """{"attributes": {"key":"value"},{"data":"SGVsbG8gQ2xvdWQgUHViL1N1YiEgSGVyZSBpcyBteSBtZXNzYWdlIQ=="},{"messageId":"136969346945"}}"""
-    )
+@Schema(description = "Represents a single Google Cloud pub/sub message.")
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class PubSubEnvelope(
+    @Schema(description = "Envelope containing all metadata from pubsub push endpoint request")
     val message: Message,
     @Schema(
         description = "Key value object containing subscription name",
-        example = """"projects/myproject/subscriptions/mysubscription"""
+        example = "projects/myproject/subscriptions/mysubscription"
     )
     val subscription: String
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class Message(
+    @Schema(example = """{"key":"value"}""")
     val attributes: Map<String, String>?,
+    @Schema(example = "ewogICAgImRhdGFzZXRJZCI6ICJkZW1vLW1vZGVsIiwKICAgICJ0aW1lc3RhbXAiOiAxNjQ4MTYyNDk0OTQ3LAogICAgInRhZ3MiOiB7CiAgICAgICAgInRhZzEiOiAidmFsdWUxIgogICAgfSwKICAgICJtdWx0aXBsZSI6IHsKICAgICAgICAiY29sdW1ucyI6IFsKICAgICAgICAgICAgIkJyYW5kIiwKICAgICAgICAgICAgIlByaWNlIgogICAgICAgIF0sCiAgICAgICAgImRhdGEiOiBbCiAgICAgICAgICAgIFsgIkhvbmRhIENpdmljIiwgMjIwMDAgXSwKICAgICAgICAgICAgWyAiVG95b3RhIENvcm9sbGEiLCAyNTAwMCBdLAogICAgICAgICAgICBbICJGb3JkIEZvY3VzIiwgMjcwMDAgXSwKICAgICAgICAgICAgWyAiQXVkaSBBNCIsIDM1MDAwIF0KICAgICAgICBdCiAgICB9Cn0K")
     val data: String,
+    @Schema(example = "123")
     val messageId: String
 )
