@@ -208,7 +208,6 @@ Here is an example from the output above
             throw IllegalArgumentException("Invalid request format", t)
         }
 
-
         val decodedMessageBytes = try {
             val decoder = Base64.getDecoder()
             decoder.decode(encodedMessageData)
@@ -221,7 +220,6 @@ Here is an example from the output above
             // Create LogRequest object from string
             val logRequest: LogRequest = mapper.readValue(decodedMessageBytes)
             return trackLogRequest(logRequest)
-
         } catch (t: MissingKotlinParameterException) {
             logger.warn("Couldn't decode the pubsub message", t)
             throw IllegalArgumentException(
@@ -282,7 +280,7 @@ data class PubSubEnvelope(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class Message(
     @Schema(example = """{"key":"value"}""")
-    val attributes: Map<String, String>?,
+    val attributes: Map<String, String>? = null,
     @Schema(example = "ewogICAgImRhdGFzZXRJZCI6ICJkZW1vLW1vZGVsIiwKICAgICJ0aW1lc3RhbXAiOiAxNjQ4MTYyNDk0OTQ3LAogICAgInRhZ3MiOiB7CiAgICAgICAgInRhZzEiOiAidmFsdWUxIgogICAgfSwKICAgICJtdWx0aXBsZSI6IHsKICAgICAgICAiY29sdW1ucyI6IFsKICAgICAgICAgICAgIkJyYW5kIiwKICAgICAgICAgICAgIlByaWNlIgogICAgICAgIF0sCiAgICAgICAgImRhdGEiOiBbCiAgICAgICAgICAgIFsgIkhvbmRhIENpdmljIiwgMjIwMDAgXSwKICAgICAgICAgICAgWyAiVG95b3RhIENvcm9sbGEiLCAyNTAwMCBdLAogICAgICAgICAgICBbICJGb3JkIEZvY3VzIiwgMjcwMDAgXSwKICAgICAgICAgICAgWyAiQXVkaSBBNCIsIDM1MDAwIF0KICAgICAgICBdCiAgICB9Cn0K")
     val data: String,
     @Schema(example = "123")

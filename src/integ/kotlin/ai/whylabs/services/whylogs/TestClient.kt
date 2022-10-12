@@ -1,6 +1,7 @@
 package ai.whylabs.services.whylogs
 
 import ai.whylabs.services.whylogs.core.LogRequest
+import ai.whylabs.services.whylogs.core.PubSubEnvelope
 import ai.whylabs.services.whylogs.core.WriteProfilesResponse
 import ai.whylabs.services.whylogs.core.config.IEnvVars
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -30,9 +31,12 @@ class TestClient(val envVars: IEnvVars) {
         }
     }
 
-    suspend fun track(request: LogRequest) {
+    suspend fun track(request: LogRequest) = request(request, "/logs")
+    suspend fun trackPubSub(request: PubSubEnvelope) = request(request, "/pubsubLogs")
+
+    private suspend inline fun <reified T> request(request: T, path: String) {
         val httpRequest = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:${envVars.port}/logs"))
+            .uri(URI.create("http://localhost:${envVars.port}$path"))
             .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(request)))
             .header("X-API-Key", envVars.expectedApiKey)
             .build()
