@@ -107,7 +107,9 @@ class SmokeTests {
                 subscription = "123",
                 message = Message(
                     data = encoded,
-                    messageId = "456"
+                    messageId = "456",
+                    publishTime = "789",
+                    orderingKey = "default"       
                 )
 
             )
