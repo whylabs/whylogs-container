@@ -109,7 +109,7 @@ class SmokeTests {
                     data = encoded,
                     messageId = "456",
                     publishTime = "789",
-                    orderingKey = "default"       
+                    orderingKey = "default"
                 )
 
             )
