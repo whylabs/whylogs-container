@@ -118,6 +118,7 @@ Here is an example from the output above
             throw IllegalArgumentException("Missing input data, must supply either a `single` or `multiple` field.")
         }
 
+        logger.debug("Logging request for ${request.datasetId}")
         try {
             // Namespacing hack right now. Whylogs doesn't care about tag names but we want to avoid collisions between
             // user supplied tags and our own internal tags that occupy the same real estate so we prefix user tags.
@@ -164,12 +165,27 @@ Here is an example from the output above
     }
 
     @OpenApi(
+        method = HttpMethod.GET,
+        summary = "Tell if the http server is healthy.",
+        description = "Tell if the http server is healthy.",
+        operationId = "health",
+        tags = ["debug"],
+        responses = [
+            OpenApiResponse("200"),
+            OpenApiResponse("500", description = "Something unexpected went wrong.")
+        ]
+    )
+    fun health(ctx: Context) {
+        // Just return 200
+    }
+
+    @OpenApi(
         headers = [OpenApiParam(name = apiKeyHeader, required = true)],
         method = HttpMethod.POST,
         summary = "Log Debug Info",
         description = "Trigger debugging info to be logged.",
         operationId = "logDebugInfo",
-        tags = ["whylogs"],
+        tags = ["debug"],
         responses = [
             OpenApiResponse("200"),
             OpenApiResponse("500", description = "Something unexpected went wrong.")

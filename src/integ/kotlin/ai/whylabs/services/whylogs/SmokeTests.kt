@@ -11,10 +11,6 @@ import ai.whylabs.services.whylogs.core.config.WriteLayer
 import ai.whylabs.services.whylogs.core.config.WriterTypes
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.github.michaelbull.retry.policy.RetryPolicy
-import com.github.michaelbull.retry.policy.constantDelay
-import com.github.michaelbull.retry.policy.limitAttempts
-import com.github.michaelbull.retry.policy.plus
 import com.github.michaelbull.retry.retry
 import io.mockk.every
 import io.mockk.mockkObject
@@ -27,8 +23,6 @@ import java.time.temporal.ChronoUnit
 import java.util.Base64
 
 class SmokeTests {
-
-    private val policy: RetryPolicy<Throwable> = constantDelay(1000) + limitAttempts(5)
 
     companion object {
         private lateinit var client: TestClient
@@ -67,8 +61,11 @@ class SmokeTests {
             )
             client.track(data)
 
-            val profileResponse = client.writeProfiles()
-            val profile = client.loadProfiles(profileResponse.profilePaths).first()
+            val (profileResponse, profile) = retry(policy) {
+                val profileResponse = client.writeProfiles()
+                val profile = client.loadProfiles(profileResponse.profilePaths).first()
+                Pair(profileResponse, profile)
+            }
 
             val expectedTimestamp = Instant.ofEpochMilli(datasetTimestamp).truncatedTo(ChronoUnit.HOURS)
             Assertions.assertEquals(1, profileResponse.profilePaths.size, "number of profiles paths returned")
@@ -279,12 +276,14 @@ class SmokeTests {
     }
 }
 
+const val profileRoot = "test-whylogs-profiles"
+
 class TestEnvVars : IEnvVars {
     override val writer = WriterTypes.DEBUG_FILE_SYSTEM
     override val whylabsApiEndpoint = "n/a"
     override val orgId = "nothing"
     override val ignoredKeys: Set<String> = setOf()
-    override val fileSystemWriterRoot = "whylogs-profiles"
+    override val fileSystemWriterRoot = profileRoot
     override val emptyProfilesDatasetIds = emptyList<String>()
     override val requestQueueingMode = WriteLayer.SQLITE
     override val requestQueueingEnabled = true

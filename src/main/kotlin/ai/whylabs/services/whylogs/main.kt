@@ -59,8 +59,10 @@ fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
             path("logs") { post(whylogs::track) }
             path("writeProfiles") { post(whylogs::writeProfiles) }
             path("logDebugInfo") { post(whylogs::logDebugInfo) }
+            get("health", whylogs::health)
         }
         after("logs", whylogs::after)
+        after("pubsubLogs", whylogs::after)
         // TODO make a call to list models to test the api key on startup as a health check
         logger.info("Checkout Swagger UI at http://localhost:${envVars.port}/swagger-ui")
         start(envVars.port)
