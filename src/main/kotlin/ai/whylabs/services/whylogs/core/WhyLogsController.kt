@@ -281,8 +281,18 @@ data class PubSubEnvelope(
 data class Message(
     @Schema(example = """{"key":"value"}""")
     val attributes: Map<String, String>? = null,
-    @Schema(example = "ewogICAgImRhdGFzZXRJZCI6ICJkZW1vLW1vZGVsIiwKICAgICJ0aW1lc3RhbXAiOiAxNjQ4MTYyNDk0OTQ3LAogICAgInRhZ3MiOiB7CiAgICAgICAgInRhZzEiOiAidmFsdWUxIgogICAgfSwKICAgICJtdWx0aXBsZSI6IHsKICAgICAgICAiY29sdW1ucyI6IFsKICAgICAgICAgICAgIkJyYW5kIiwKICAgICAgICAgICAgIlByaWNlIgogICAgICAgIF0sCiAgICAgICAgImRhdGEiOiBbCiAgICAgICAgICAgIFsgIkhvbmRhIENpdmljIiwgMjIwMDAgXSwKICAgICAgICAgICAgWyAiVG95b3RhIENvcm9sbGEiLCAyNTAwMCBdLAogICAgICAgICAgICBbICJGb3JkIEZvY3VzIiwgMjcwMDAgXSwKICAgICAgICAgICAgWyAiQXVkaSBBNCIsIDM1MDAwIF0KICAgICAgICBdCiAgICB9Cn0K")
+    @Schema(
+        description = "The message data field. If this field is empty, the message must contain at least one attribute.",
+        example = "ewogICAgImRhdGFzZXRJZCI6ICJkZW1vLW1vZGVsIiwKICAgICJ0aW1lc3RhbXAiOiAxNjQ4MTYyNDk0OTQ3LAogICAgInRhZ3MiOiB7CiAgICAgICAgInRhZzEiOiAidmFsdWUxIgogICAgfSwKICAgICJtdWx0aXBsZSI6IHsKICAgICAgICAiY29sdW1ucyI6IFsKICAgICAgICAgICAgIkJyYW5kIiwKICAgICAgICAgICAgIlByaWNlIgogICAgICAgIF0sCiAgICAgICAgImRhdGEiOiBbCiAgICAgICAgICAgIFsgIkhvbmRhIENpdmljIiwgMjIwMDAgXSwKICAgICAgICAgICAgWyAiVG95b3RhIENvcm9sbGEiLCAyNTAwMCBdLAogICAgICAgICAgICBbICJGb3JkIEZvY3VzIiwgMjcwMDAgXSwKICAgICAgICAgICAgWyAiQXVkaSBBNCIsIDM1MDAwIF0KICAgICAgICBdCiAgICB9Cn0K"
+        )
     val data: String,
     @Schema(example = "123")
-    val messageId: String
+    val messageId: String,
+    @Schema(
+        description = "A timestamp in RFC3339 UTC 'Zulu' format, with nanosecond resolution and up to nine fractional digits",
+        example = "2014-10-02T15:01:23Z"
+        )
+    val publishTime: String,
+    @Schema(description = "If non-empty, identifies related messages for which publish order should be respected")
+    val orderingKey: String?
 )
