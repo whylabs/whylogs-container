@@ -1,13 +1,17 @@
 package ai.whylabs.services.whylogs
 
 import ai.whylabs.services.whylogs.core.LogRequest
+import ai.whylabs.services.whylogs.core.Message
 import ai.whylabs.services.whylogs.core.MultiLog
+import ai.whylabs.services.whylogs.core.PubSubEnvelope
 import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.core.config.ProfileWritePeriod
 import ai.whylabs.services.whylogs.core.config.WriteLayer
 import ai.whylabs.services.whylogs.core.config.WriterTypes
 import ai.whylabs.services.whylogs.persistent.queue.PopSize
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.github.michaelbull.retry.retry
 import io.mockk.every
 import io.mockk.mockkObject
 import kotlinx.coroutines.runBlocking
@@ -16,6 +20,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.Base64
 
 class SmokeTests {
 
@@ -56,8 +61,62 @@ class SmokeTests {
             )
             client.track(data)
 
-            val profileResponse = client.writeProfiles()
-            val profile = client.loadProfiles(profileResponse.profilePaths).first()
+            val (profileResponse, profile) = retry(policy) {
+                val profileResponse = client.writeProfiles()
+                val profile = client.loadProfiles(profileResponse.profilePaths).first()
+                Pair(profileResponse, profile)
+            }
+
+            val expectedTimestamp = Instant.ofEpochMilli(datasetTimestamp).truncatedTo(ChronoUnit.HOURS)
+            Assertions.assertEquals(1, profileResponse.profilePaths.size, "number of profiles paths returned")
+            Assertions.assertEquals(1, profileResponse.profilesWritten, "number of profiles written")
+            Assertions.assertEquals(expectedTimestamp, profile.dataTimestamp, "dataset timestamp of the written profile")
+            Assertions.assertEquals(setOf("Brand", "Price"), profile.columns.keys, "")
+            Assertions.assertEquals(mapOf("whylogs.tag.tag1" to "value1", "datasetId" to "foo", "orgId" to "nothing"), profile.tags, "")
+        }
+    }
+
+    @Test
+    fun `tracking pubsub works`() = runBlocking {
+        client.withServer {
+            val datasetTimestamp = 1648751959098
+            val expectedLogRequest = LogRequest(
+                datasetId = "foo",
+                timestamp = datasetTimestamp,
+                tags = mapOf(
+                    "tag1" to "value1"
+                ),
+                single = null,
+                multiple = MultiLog(
+                    columns = listOf("Brand", "Price"),
+                    data = listOf(
+                        listOf("Honda Civic", 22000),
+                        listOf("Toyota Corolla", 25000),
+                        listOf("Ford Focus", 27000),
+                        listOf("Audi A4", 35000)
+                    )
+                )
+            )
+
+            val encoded = Base64.getEncoder().encodeToString(jacksonObjectMapper().writeValueAsBytes(expectedLogRequest))
+
+            val data = PubSubEnvelope(
+                subscription = "123",
+                message = Message(
+                    data = encoded,
+                    messageId = "456",
+                    publishTime = "789",
+                    orderingKey = "default"
+                )
+
+            )
+            client.trackPubSub(data)
+
+            val (profileResponse, profile) = retry(policy) {
+                val profileResponse = client.writeProfiles()
+                val profile = client.loadProfiles(profileResponse.profilePaths).first()
+                Pair(profileResponse, profile)
+            }
 
             val expectedTimestamp = Instant.ofEpochMilli(datasetTimestamp).truncatedTo(ChronoUnit.HOURS)
             Assertions.assertEquals(1, profileResponse.profilePaths.size, "number of profiles paths returned")
@@ -217,12 +276,14 @@ class SmokeTests {
     }
 }
 
+const val profileRoot = "test-whylogs-profiles"
+
 class TestEnvVars : IEnvVars {
     override val writer = WriterTypes.DEBUG_FILE_SYSTEM
     override val whylabsApiEndpoint = "n/a"
     override val orgId = "nothing"
     override val ignoredKeys: Set<String> = setOf()
-    override val fileSystemWriterRoot = "whylogs-profiles"
+    override val fileSystemWriterRoot = profileRoot
     override val emptyProfilesDatasetIds = emptyList<String>()
     override val requestQueueingMode = WriteLayer.SQLITE
     override val requestQueueingEnabled = true
