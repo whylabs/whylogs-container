@@ -80,6 +80,7 @@ private fun CoroutineScope.debugActor(options: DebugActorOptions) = actor<DebugI
                     info.profilesWriteFailureCauses.removeLast()
                 }
             }
+
             is DebugInfoMessage.ProfileWriteAttemptMessage -> {
                 info.profilesWriteAttempts += msg.n
                 info.lastProfileWriteAttempt = msg.writeTime
@@ -116,6 +117,7 @@ class DebugInfoManager internal constructor(
             override val ignoredKeys = envVars.ignoredKeys
             override val fileSystemWriterRoot = envVars.fileSystemWriterRoot
             override val emptyProfilesDatasetIds = envVars.emptyProfilesDatasetIds
+            override val disableAuth = envVars.disableAuth
             override val requestQueueingMode = envVars.requestQueueingMode
             override val requestQueueingEnabled = envVars.requestQueueingEnabled
             override val profileStorageMode = envVars.profileStorageMode

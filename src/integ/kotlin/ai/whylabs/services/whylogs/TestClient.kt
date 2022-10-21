@@ -32,10 +32,7 @@ class TestClient(val envVars: IEnvVars) {
 
     suspend inline fun withServer(block: () -> Unit) {
         val job = startServer(envVars)
-
-        retry(policy) {
-            this.healthCheck()
-        }
+        retry(policy) { healthCheck() }
 
         try {
             deleteLocalProfiles()
@@ -69,7 +66,11 @@ class TestClient(val envVars: IEnvVars) {
                     GET()
                 }
             }
-            .header("X-API-Key", envVars.expectedApiKey)
+            .apply {
+                if (!envVars.disableAuth) {
+                    header("X-API-Key", envVars.expectedApiKey)
+                }
+            }
             .build()
         val response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString())
 

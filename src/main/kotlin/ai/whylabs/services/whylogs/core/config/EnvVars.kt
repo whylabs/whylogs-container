@@ -58,6 +58,7 @@ interface IEnvVars {
     val fileSystemWriterRoot: String
 
     val emptyProfilesDatasetIds: List<String>
+    val disableAuth: Boolean
     val requestQueueingMode: WriteLayer
     val requestQueueingEnabled: Boolean
 
@@ -107,6 +108,7 @@ class EnvVars private constructor() : IEnvVars {
     override val kafkaConfig = KafkaConfig.parse(this)
 
     override val emptyProfilesDatasetIds: List<String> = parseEnvList(EnvVarNames.EMPTY_PROFILE_DATASET_IDS)
+    override val disableAuth: Boolean = EnvVarNames.DISABLE_AUTH.getOrDefault().toBoolean()
     override val ignoredKeys: Set<String> = parseEnvList(EnvVarNames.IGNORED_KEYS).toSet()
 
     override val requestQueueingMode = WriteLayer.valueOf(EnvVarNames.REQUEST_QUEUEING_MODE.getOrDefault())

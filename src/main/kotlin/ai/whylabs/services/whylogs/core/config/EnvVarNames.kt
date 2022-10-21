@@ -19,6 +19,14 @@ enum class EnvVarNames(val default: String? = null) {
     EMPTY_PROFILE_DATASET_IDS("[]"),
 
     /**
+     * Disables the password auth header that the container uses to validate
+     * requests. Some integration paths make it difficult to send custom headers
+     * values and VPC privacy may be adequate for use cases as a substitute.
+     */
+    // container.disable_auth
+    DISABLE_AUTH("false"),
+
+    /**
      * A string password that the container requires for each request in
      * the `X-API-Key` header. This is a safeguard if you need to have
      * the container exposed to the internet or other untrusted sources.
