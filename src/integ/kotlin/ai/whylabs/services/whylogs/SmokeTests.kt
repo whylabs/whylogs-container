@@ -38,6 +38,42 @@ class SmokeTests {
     }
 
     @Test
+    fun `disabling auth works`() = runBlocking {
+        val env = TestEnvVars(disableAuth = true)
+        every { EnvVars.instance } returns env
+        client = TestClient(env)
+
+        // Should not throw
+        client.withServer {
+            val datasetTimestamp = 1648751959098
+
+            val data = LogRequest(
+                datasetId = "foo",
+                timestamp = datasetTimestamp,
+                tags = mapOf(
+                    "tag1" to "value1"
+                ),
+                single = null,
+                multiple = MultiLog(
+                    columns = listOf("Brand", "Price"),
+                    data = listOf(
+                        listOf("Honda Civic", 22000),
+                        listOf("Toyota Corolla", 25000),
+                        listOf("Ford Focus", 27000),
+                        listOf("Audi A4", 35000)
+                    )
+                )
+            )
+            client.track(data)
+            retry(policy) {
+                val profileResponse = client.writeProfiles()
+                val profile = client.loadProfiles(profileResponse.profilePaths).first()
+                Pair(profileResponse, profile)
+            }
+        }
+    }
+
+    @Test
     fun `writing profiles works`() = runBlocking {
         client.withServer {
             val datasetTimestamp = 1648751959098
@@ -278,7 +314,7 @@ class SmokeTests {
 
 const val profileRoot = "test-whylogs-profiles"
 
-class TestEnvVars : IEnvVars {
+class TestEnvVars(override val disableAuth: Boolean = false) : IEnvVars {
     override val writer = WriterTypes.DEBUG_FILE_SYSTEM
     override val whylabsApiEndpoint = "n/a"
     override val orgId = "nothing"

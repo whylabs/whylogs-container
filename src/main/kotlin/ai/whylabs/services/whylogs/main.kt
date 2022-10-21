@@ -2,6 +2,7 @@ package ai.whylabs.services.whylogs
 
 import ai.whylabs.services.whylogs.core.WhyLogsController
 import ai.whylabs.services.whylogs.core.WhyLogsProfileManager
+import ai.whylabs.services.whylogs.core.config.EnvVarNames
 import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.kafka.ConsumerController
@@ -34,6 +35,10 @@ fun main() {
 }
 
 fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
+    if (envVars.disableAuth) {
+        logger.warn("Auth is disabled via the ${EnvVarNames.DISABLE_AUTH} env variable.")
+    }
+
     val profileManager = WhyLogsProfileManager(envVars = envVars)
     if (envVars.kafkaConfig != null) {
         ConsumerController(envVars, profileManager)
@@ -47,9 +52,10 @@ fun startServer(envVars: IEnvVars = EnvVars.instance): Javalin = try {
         it.jsonMapper(JavalinJackson(mapper))
     }.apply {
         Runtime.getRuntime().addShutdownHook(Thread { stop() })
-        before("pubsubLogs", whylogs::preprocess)
-        before("logs", whylogs::preprocess)
-        before("writeProfiles", whylogs::preprocess)
+        before("pubsubLogs", whylogs::authenticate)
+        before("logs", whylogs::authenticate)
+        before("writeProfiles", whylogs::authenticate)
+        before("logDebugInfo", whylogs::authenticate)
 
         exception(IllegalArgumentException::class.java) { e, ctx ->
             ctx.json(e.message ?: "Bad Request").status(400)

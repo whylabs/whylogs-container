@@ -13,6 +13,7 @@ class TestEnvVars : IEnvVars {
     override val orgId = "org-1"
     override val ignoredKeys: Set<String> = setOf()
     override val emptyProfilesDatasetIds = emptyList<String>()
+    override val disableAuth = false
     override val requestQueueingMode = WriteLayer.SQLITE
     override val requestQueueingEnabled = true
     override val profileStorageMode = WriteLayer.SQLITE

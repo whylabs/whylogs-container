@@ -1,5 +1,6 @@
 package ai.whylabs.services.whylogs.core
 
+import ai.whylabs.services.whylogs.core.config.EnvVarNames
 import ai.whylabs.services.whylogs.core.config.EnvVars
 import ai.whylabs.services.whylogs.core.config.IEnvVars
 import ai.whylabs.services.whylogs.core.config.WriterTypes
@@ -38,8 +39,17 @@ class WhyLogsController(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val mapper = jacksonObjectMapper()
 
-    fun preprocess(ctx: Context) {
+    fun authenticate(ctx: Context) {
+        if (envVars.disableAuth) {
+            return
+        }
+
         val apiKey = ctx.header(apiKeyHeader)?.trim()
+
+        if (apiKey.isNullOrEmpty() && !envVars.disableAuth) {
+            logger.warn("Dropping request because of missing API key. Auth can be disabled via the ${EnvVarNames.DISABLE_AUTH} env var.")
+            throw UnauthorizedResponse("API key header $apiKeyHeader missing")
+        }
 
         if (apiKey != envVars.expectedApiKey) {
             logger.warn("Dropping request because of invalid API key")
@@ -54,7 +64,7 @@ class WhyLogsController(
     }
 
     @OpenApi(
-        headers = [OpenApiParam(name = apiKeyHeader, required = true)],
+        headers = [OpenApiParam(name = apiKeyHeader, required = false)],
         method = HttpMethod.POST,
         summary = "Log Data",
         description = "Log a map of feature names and values or an array of data points",
@@ -139,7 +149,7 @@ Here is an example from the output above
     }
 
     @OpenApi(
-        headers = [OpenApiParam(name = apiKeyHeader, required = true)],
+        headers = [OpenApiParam(name = apiKeyHeader, required = false)],
         method = HttpMethod.POST,
         summary = "Write Profiles",
         description = "Force the container to write out the pending profiles via whatever method it's configured for.",
@@ -180,7 +190,7 @@ Here is an example from the output above
     }
 
     @OpenApi(
-        headers = [OpenApiParam(name = apiKeyHeader, required = true)],
+        headers = [OpenApiParam(name = apiKeyHeader, required = false)],
         method = HttpMethod.POST,
         summary = "Log Debug Info",
         description = "Trigger debugging info to be logged.",
@@ -194,7 +204,7 @@ Here is an example from the output above
     fun logDebugInfo(ctx: Context) = runBlocking { debugInfo.send(DebugInfoMessage.LogMessage) }
 
     @OpenApi(
-        headers = [OpenApiParam(name = apiKeyHeader, required = true)],
+        headers = [OpenApiParam(name = apiKeyHeader, required = false)],
         method = HttpMethod.POST,
         summary = "Track pub/sub messages",
         description = "Decode base64 encoded pub/sub message and track them",
