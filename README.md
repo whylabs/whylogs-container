@@ -1,3 +1,7 @@
+> ⚠️ This is the older Java based whylogs container. We have a new [Python based container](https://github.com/whylabs/whylogs-container-python/)
+> with all of the Python whylogs features. You should use that container unless
+> you need a feature that hasn't been ported from this container yet.
+
 This is the whylogs container, a container that hosts
 [whylogs](https://github.com/whylabs/whylogs) behind a REST interface that can
 be used to generate whylogs profiles for data monitoring. This container is a
